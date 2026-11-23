@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { getCuidadores, loginUser, registerUser } from '../api/auth';
 import { colors } from '../theme';
 import { AccountRole, UserAccount } from '../types';
 
@@ -19,9 +20,10 @@ export function AuthScreen({ mode, onBack, onChangeMode, onComplete }: Props) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<AccountRole>('family');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const isSignup = mode === 'signup';
 
-  const submit = () => {
+  const submit = async () => {
     if (isSignup && (!name.trim() || !phone.trim())) {
       setError('Completa tu nombre y teléfono para continuar.');
       return;
@@ -42,19 +44,82 @@ export function AuthScreen({ mode, onBack, onChangeMode, onComplete }: Props) {
       setError('La contraseña debe tener al menos 8 caracteres.');
       return;
     }
+
     setError('');
-    onComplete({
-      name: isSignup ? name.trim() : email.trim().split('@')[0],
-      email: email.trim(),
-      phone: phone.trim(),
-      role: isSignup ? role : 'family',
-    });
+    setLoading(true);
+    const correo = email.trim().toLowerCase();
+    const payloadBase = {
+      correo,
+      password: password.trim(),
+    };
+
+    try {
+      const response = isSignup
+        ? await registerUser({
+            ...payloadBase,
+            rol: role === 'caregiver' ? 'cuidador' : 'familiar',
+            nombre: name.trim(),
+            telefono: phone.trim(),
+          })
+        : await loginUser(payloadBase);
+
+      const data = (response && typeof response === 'object' ? response : {}) as Record<string, any>;
+      const user = (data.usuario ?? data.user ?? data.data ?? data) as Record<string, any>;
+      const apiRole = String(user.rol ?? user.role ?? (isSignup ? role : 'family')).toLowerCase();
+      const userId = typeof user.id === 'number' ? user.id : typeof data.id === 'number' ? data.id : undefined;
+      const token =
+        [data.token, data.access_token, data.jwt, data.accessToken, user.token, user.access_token, (data.data as any)?.token]
+          .find((v): v is string => typeof v === 'string' && v.length > 0);
+      let resolvedRole: AccountRole = apiRole === 'cuidador' || apiRole === 'caregiver' ? 'caregiver' : 'family';
+
+      let caregiverProfile: UserAccount['caregiverProfile'] | undefined;
+      if (userId) {
+        try {
+          const cuidadores = await getCuidadores(token);
+          const found = cuidadores.find((c) => Number(c.usuario_id) === userId);
+          if (found) {
+            resolvedRole = 'caregiver';
+            caregiverProfile = {
+              apiId: Number(found.id),
+              identificationNumber: String(found.cedula ?? ''),
+              rfc: String(found.rfc ?? ''),
+              professionalTitle: String(found.titulo ?? ''),
+              serviceLocation: '',
+              description: String(found.descripcion ?? ''),
+              yearsExperience: Number(found.anios_experiencia ?? 0),
+              hourlyRate: Number(found.tarifa_hora ?? 0),
+              specialties: String(found.especialidades ?? '').split(',').map((x) => x.trim()).filter(Boolean),
+              availability: { days: [], startTime: '08:00', endTime: '17:00' },
+              disponible: Boolean(found.disponible) && Boolean(found.verificado),
+              verificado: Boolean(found.verificado),
+            };
+          }
+        } catch {
+          // ignorar: usamos rol devuelto por auth
+        }
+      }
+
+      onComplete({
+        id: userId,
+        token,
+        name: String(user.nombre ?? user.name ?? (isSignup ? name.trim() : correo.split('@')[0])),
+        email: String(user.correo ?? user.email ?? correo),
+        phone: String(user.telefono ?? user.phone ?? phone.trim()),
+        role: resolvedRole,
+        caregiverProfile,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'No se pudo completar la solicitud.';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
       <Pressable accessibilityLabel="Volver" onPress={onBack} style={styles.back}>
-        <Text style={styles.backText}>‹</Text>
+        <Text style={styles.backText}>{'<'}</Text>
       </Pressable>
       <View style={styles.brandMark}><Text style={styles.brandMarkText}>Q</Text></View>
       <Text style={styles.brand}>Qualify</Text>
@@ -74,14 +139,14 @@ export function AuthScreen({ mode, onBack, onChangeMode, onComplete }: Props) {
             <RoleOption
               active={role === 'family'}
               description="Busco cuidado para mi familia"
-              icon="♡"
+              icon="F"
               label="Familia"
               onPress={() => setRole('family')}
             />
             <RoleOption
               active={role === 'caregiver'}
               description="Quiero ofrecer mis servicios"
-              icon="✦"
+              icon="C"
               label="Cuidador"
               onPress={() => setRole('caregiver')}
             />
@@ -122,15 +187,16 @@ export function AuthScreen({ mode, onBack, onChangeMode, onComplete }: Props) {
         secureTextEntry
       />
 
-      {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-      <Pressable onPress={submit} style={styles.primaryButton}>
-        <Text style={styles.primaryText}>
-          {isSignup && role === 'caregiver' ? 'Continuar con mi perfil' : isSignup ? 'Crear cuenta' : 'Iniciar sesión'}
-        </Text>
+            {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+      <Pressable disabled={loading} onPress={submit} style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}>
+        {loading ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <Text style={styles.primaryText}>
+            {isSignup && role === 'caregiver' ? 'Continuar con mi perfil' : isSignup ? 'Crear cuenta' : 'Iniciar sesión'}
+          </Text>
+        )}
       </Pressable>
-      <Text style={styles.disclaimer}>
-        Prototipo sin conexión: tus datos no se envían ni se guardan.
-      </Text>
       <View style={styles.switchLine}>
         <Text style={styles.switchText}>{isSignup ? '¿Ya tienes una cuenta?' : '¿Aún no tienes cuenta?'}</Text>
         <Pressable onPress={() => onChangeMode(isSignup ? 'login' : 'signup')}>
@@ -217,6 +283,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 12, borderWidth: 1, color: colors.ink, fontSize: 13, height: 49, paddingHorizontal: 14 },
   error: { color: '#C74C45', fontSize: 12, marginBottom: 12 },
   primaryButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 14, marginTop: 8, paddingVertical: 15 },
+  primaryButtonDisabled: { opacity: 0.7 },
   primaryText: { color: colors.white, fontSize: 14, fontWeight: '800' },
   disclaimer: { color: colors.muted, fontSize: 10, lineHeight: 16, marginTop: 14, textAlign: 'center' },
   switchLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginTop: 24 },

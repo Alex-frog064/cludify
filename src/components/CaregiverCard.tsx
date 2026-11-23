@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Caregiver } from '../types';
 import { colors } from '../theme';
@@ -23,7 +23,7 @@ export function CaregiverCard({ caregiver, onPress, compact = false }: Props) {
           {caregiver.verified && <Ionicons color={colors.tealDark} name="checkmark-circle" size={15} />}
         </View>
         <Text style={styles.details}>
-          <Text style={styles.rating}>★ {caregiver.rating}</Text>  ({caregiver.reviews} opiniones) · {caregiver.distance}
+          <Text style={styles.rating}>Calif. {caregiver.rating}</Text> ({caregiver.reviews} opiniones) · {caregiver.distance}
         </Text>
         <View style={styles.availabilityRow}>
           <View style={styles.availableDot} />

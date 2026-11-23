@@ -19,7 +19,7 @@ const familyTabs: { key: TabKey; label: string; icon: IconName }[] = [
 const caregiverTabs: { key: TabKey; label: string; icon: IconName }[] = [
   { key: 'notifications', label: 'Avisos', icon: 'notifications-outline' },
   { key: 'messages', label: 'Mensajes', icon: 'chatbubble-ellipses-outline' },
-  { key: 'clients', label: 'Clientes', icon: 'people-outline' },
+  { key: 'clients', label: 'Servicios', icon: 'briefcase-outline' },
   { key: 'profile', label: 'Perfil', icon: 'person-outline' },
 ];
 

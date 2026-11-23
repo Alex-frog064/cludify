@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,15 +13,18 @@ import {
   View,
 } from 'react-native';
 import { CaregiverTabKey, TabKey } from '../components/BottomTabBar';
+import { OpenStreetMapView } from '../components/OpenStreetMapView';
+import { createDisponibilidad, createServicio, deleteCuidador, deleteDisponibilidad, deleteServicio, deleteUsuario, getDisponibilidad, getServicios, subirDocumentosVerificacion, updateCuidador, updateCuidadorDisponible, updateDisponibilidad, updateServicio } from '../api/auth';
 import { colors } from '../theme';
 import { getCurrentServiceLocation } from '../utils/currentServiceLocation';
-import { Coordinates, UserAccount } from '../types';
+import { Coordinates, Disponibilidad, Servicio, UserAccount } from '../types';
 
 type Props = {
   tab: CaregiverTabKey;
   user: UserAccount;
   onSelectTab: (tab: TabKey) => void;
-  onSaveLocation: (location: string, coordinates?: Coordinates) => void;
+  onSaveLocation: (location: string, coordinates?: Coordinates) => Promise<void> | void;
+  onUpdateUser: (user: UserAccount) => void;
   onSignOut: () => void;
 };
 
@@ -46,7 +53,7 @@ const notifications: {
   {
     id: 'opinion',
     category: 'Opiniones',
-    icon: '★',
+    icon: '•',
     title: 'Recibiste una nueva opinión',
     body: '“María fue muy atenta y puntual. La recomendamos.”',
     time: 'Hace 2 h',
@@ -55,7 +62,7 @@ const notifications: {
   {
     id: 'offer',
     category: 'Ofertas',
-    icon: '✦',
+    icon: '•',
     title: 'Nueva oportunidad cerca de ti',
     body: 'Una familia en Narvarte necesita compañía este fin de semana.',
     time: 'Ayer',
@@ -114,12 +121,296 @@ const initialMessages: Record<string, string[]> = {
   roberto: ['¿Tienes espacio el viernes por la tarde?'],
 };
 
-export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocation, onSignOut }: Props) {
+function toApiServicio(s: Servicio) {
+  return {
+    abuelo_id: s.abuelo_id,
+    cuidador_id: s.cuidador_id,
+    nota: s.nota,
+    inicio: s.inicio,
+    fin: s.fin,
+    tarifa_hora: s.tarifa_hora,
+    total: s.total,
+    comision: s.comision,
+    estado: s.estado,
+    estado_pago: s.estado_pago,
+  };
+}
+
+function emptyServicio(cuidadorId: number): Servicio {
+  const now = new Date();
+  const end = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  return { id: 0, abuelo_id: 0, cuidador_id: cuidadorId, nota: '', inicio: now.toISOString(), fin: end.toISOString(), tarifa_hora: 0, total: 0, comision: 0, estado: 'activo', estado_pago: 'pendiente' };
+}
+
+export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocation, onUpdateUser, onSignOut }: Props) {
   const [selectedCategory, setSelectedCategory] = useState<NotificationCategory>('Todas');
   const [readNotifications, setReadNotifications] = useState<string[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [messages, setMessages] = useState(initialMessages);
   const [draftMessage, setDraftMessage] = useState('');
+  const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [serviciosLoading, setServiciosLoading] = useState(false);
+  const [servicioError, setServicioError] = useState('');
+  const [servicioDraft, setServicioDraft] = useState<Servicio | null>(null);
+  const [servicioSaving, setServicioSaving] = useState(false);
+  const [disponibilidades, setDisponibilidades] = useState<Disponibilidad[]>([]);
+  const [dispLoading, setDispLoading] = useState(false);
+  const [dispDraft, setDispDraft] = useState<{ ids: number[]; dias: number[]; hora_inicio: string; hora_fin: string } | null>(null);
+  const [dispSaving, setDispSaving] = useState(false);
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [ineUri, setIneUri] = useState<string | null>(null);
+  const [selfieUri, setSelfieUri] = useState<string | null>(null);
+  const [verificationSaving, setVerificationSaving] = useState(false);
+  const [verificationError, setVerificationError] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({
+    name: user.name,
+    phone: user.phone,
+    identificationNumber: user.caregiverProfile?.identificationNumber ?? '',
+    rfc: user.caregiverProfile?.rfc ?? '',
+    professionalTitle: user.caregiverProfile?.professionalTitle ?? '',
+    description: user.caregiverProfile?.description ?? '',
+    yearsExperience: String(user.caregiverProfile?.yearsExperience ?? ''),
+    hourlyRate: String(user.caregiverProfile?.hourlyRate ?? ''),
+    specialties: (user.caregiverProfile?.specialties ?? []).join(', '),
+    disponible: !!user.caregiverProfile?.disponible,
+  });
+
+  useEffect(() => {
+    setProfileDraft({
+      name: user.name,
+      phone: user.phone,
+      identificationNumber: user.caregiverProfile?.identificationNumber ?? '',
+      rfc: user.caregiverProfile?.rfc ?? '',
+      professionalTitle: user.caregiverProfile?.professionalTitle ?? '',
+      description: user.caregiverProfile?.description ?? '',
+      yearsExperience: String(user.caregiverProfile?.yearsExperience ?? ''),
+      hourlyRate: String(user.caregiverProfile?.hourlyRate ?? ''),
+      specialties: (user.caregiverProfile?.specialties ?? []).join(', '),
+      disponible: !!user.caregiverProfile?.disponible,
+    });
+  }, [user]);
+
+  const pickVerificationImage = async (kind: 'ine' | 'selfie', source: 'camera' | 'library') => {
+    try {
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setVerificationError('Necesitas permiso de cámara para tomar la foto.');
+          return;
+        }
+      }
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8 });
+      if (result.canceled || !result.assets?.[0]) return;
+      if (kind === 'ine') setIneUri(result.assets[0].uri);
+      else setSelfieUri(result.assets[0].uri);
+      setVerificationError('');
+    } catch (e) {
+      setVerificationError(e instanceof Error ? e.message : 'No se pudo seleccionar la imagen.');
+    }
+  };
+
+  const askVerificationImage = (kind: 'ine' | 'selfie') => {
+    Alert.alert(
+      kind === 'ine' ? 'Foto de tu INE' : 'Foto de tu selfie',
+      'Elige cómo quieres agregar la imagen.',
+      [
+        { text: 'Tomar foto', onPress: () => { void pickVerificationImage(kind, 'camera'); } },
+        { text: 'Elegir de galería', onPress: () => { void pickVerificationImage(kind, 'library'); } },
+        { text: 'Cancelar', style: 'cancel' },
+      ],
+    );
+  };
+
+  const submitVerification = async () => {
+    const cuidadorId = user.caregiverProfile?.apiId;
+    if (!cuidadorId) {
+      setVerificationError('No se encontró tu perfil de cuidador en el servidor.');
+      return;
+    }
+    if (!ineUri || !selfieUri) {
+      setVerificationError('Selecciona la foto de tu INE y tu selfie.');
+      return;
+    }
+    setVerificationSaving(true);
+    setVerificationError('');
+    try {
+      await subirDocumentosVerificacion(
+        cuidadorId,
+        { uri: ineUri, name: 'ine.jpg', type: 'image/jpeg' },
+        { uri: selfieUri, name: 'selfie.jpg', type: 'image/jpeg' },
+        user.token,
+      );
+      setVerificationSent(true);
+      Alert.alert('Documentos enviados', 'Tu verificación quedó en revisión. No podrás activarte hasta que sea aprobada.');
+    } catch (e) {
+      setVerificationError(e instanceof Error ? e.message : 'No se pudieron subir los documentos.');
+    } finally {
+      setVerificationSaving(false);
+    }
+  };
+
+  const saveCaregiverProfile = async () => {
+    if (!user.id || !user.caregiverProfile) return;
+    setProfileSaving(true); setProfileError('');
+    try {
+      const payload = {
+        usuario_id: user.id,
+        cedula: profileDraft.identificationNumber.trim(),
+        titulo: profileDraft.professionalTitle.trim(),
+        rfc: profileDraft.rfc.trim().toUpperCase(),
+        descripcion: profileDraft.description.trim(),
+        anios_experiencia: Number(profileDraft.yearsExperience || 0),
+        tarifa_hora: Number(profileDraft.hourlyRate || 0),
+        especialidades: profileDraft.specialties.split(',').map((s) => s.trim()).filter(Boolean).join(', '),
+      };
+      if (user.caregiverProfile.apiId) await updateCuidador(user.caregiverProfile.apiId, payload, user.token);
+      onUpdateUser({
+        ...user,
+        name: profileDraft.name.trim(),
+        phone: profileDraft.phone.trim(),
+        caregiverProfile: {
+          ...user.caregiverProfile,
+          identificationNumber: payload.cedula,
+          professionalTitle: payload.titulo,
+          rfc: payload.rfc,
+          description: payload.descripcion,
+          yearsExperience: payload.anios_experiencia,
+          hourlyRate: payload.tarifa_hora,
+          specialties: payload.especialidades ? payload.especialidades.split(',').map((s) => s.trim()) : [],
+          disponible: profileDraft.disponible,
+        },
+      });
+      setProfileEditing(false);
+    } catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar.'); }
+    finally { setProfileSaving(false); }
+  };
+
+  const removeCaregiverProfile = async () => {
+    if (!user.caregiverProfile?.apiId) { setProfileError('No se encontró el cuidador en API.'); return; }
+    setProfileSaving(true); setProfileError('');
+    try {
+      await deleteCuidador(user.caregiverProfile.apiId, user.token);
+      onSignOut();
+    } catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo eliminar.'); }
+    finally { setProfileSaving(false); }
+  };
+
+  const deleteAccount = async () => {
+    if (!user.id) { setProfileError('No se encontró la cuenta.'); return; }
+    setProfileSaving(true); setProfileError('');
+    try {
+      if (user.caregiverProfile?.apiId) {
+        try { await deleteCuidador(user.caregiverProfile.apiId, user.token); } catch { /* continuar con cuenta */ }
+      }
+      await deleteUsuario(user.id, user.token);
+      onSignOut();
+    } catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo eliminar la cuenta.'); }
+    finally { setProfileSaving(false); }
+  };
+
+  const loadServicios = async () => {
+    if (!user.id) return;
+    setServiciosLoading(true);
+    setServicioError('');
+    try {
+      const data = await getServicios(user.token);
+      const mine = data
+        .filter((r) => Number(r.cuidador_id) === user.id)
+        .map((r) => ({
+          id: Number(r.id),
+          abuelo_id: Number(r.abuelo_id),
+          cuidador_id: Number(r.cuidador_id),
+          nota: String(r.nota ?? ''),
+          inicio: String(r.inicio ?? ''),
+          fin: String(r.fin ?? ''),
+          tarifa_hora: Number(r.tarifa_hora ?? 0),
+          total: Number(r.total ?? 0),
+          comision: Number(r.comision ?? 0),
+          estado: String(r.estado ?? 'activo'),
+          estado_pago: String(r.estado_pago ?? 'pendiente'),
+        } as Servicio));
+      setServicios(mine);
+    } catch (e) {
+      setServicioError(e instanceof Error ? e.message : 'No se pudieron cargar servicios.');
+    } finally {
+      setServiciosLoading(false);
+    }
+  };
+
+  const loadDisponibilidad = async () => {
+    const cuidadorId = user.caregiverProfile?.apiId;
+    if (!cuidadorId) return;
+    setDispLoading(true);
+    try {
+      const data = await getDisponibilidad(user.token);
+      setDisponibilidades(data.filter((r) => Number(r.cuidador_id) === cuidadorId).map((r) => ({
+        id: Number(r.id), cuidador_id: Number(r.cuidador_id), dia_semana: Number(r.dia_semana),
+        hora_inicio: String(r.hora_inicio ?? ''), hora_fin: String(r.hora_fin ?? ''),
+      })));
+    } catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo cargar disponibilidad.'); }
+    finally { setDispLoading(false); }
+  };
+
+  useEffect(() => { if (tab === 'clients') void loadServicios(); }, [tab, user.id, user.token]);
+  useEffect(() => { if (tab === 'profile') void loadDisponibilidad(); }, [tab, user.caregiverProfile?.apiId, user.token]);
+
+  const saveDisponibilidad = async () => {
+    const cuidadorId = user.caregiverProfile?.apiId;
+    if (!dispDraft) return;
+    if (!cuidadorId) { setProfileError('No se encontró tu perfil de cuidador. Vuelve a iniciar sesión.'); return; }
+    if (!user.token) { setProfileError('Tu sesión no tiene token. Cierra sesión e inicia de nuevo.'); return; }
+    if (!dispDraft.dias.length) { setProfileError('Selecciona al menos un día.'); return; }
+    setDispSaving(true); setProfileError('');
+    try {
+      const selected = [...dispDraft.dias].sort((a,b)=>a-b);
+      if (dispDraft.ids.length) {
+        const first = selected[0];
+        await updateDisponibilidad(dispDraft.ids[0], { cuidador_id: cuidadorId, dia_semana: first, hora_inicio: dispDraft.hora_inicio, hora_fin: dispDraft.hora_fin }, user.token);
+        for (const id of dispDraft.ids.slice(1)) await deleteDisponibilidad(id, user.token);
+        for (const dia of selected.slice(1)) await createDisponibilidad({ cuidador_id: cuidadorId, dia_semana: dia, hora_inicio: dispDraft.hora_inicio, hora_fin: dispDraft.hora_fin }, user.token);
+      } else {
+        for (const dia of selected) await createDisponibilidad({ cuidador_id: cuidadorId, dia_semana: dia, hora_inicio: dispDraft.hora_inicio, hora_fin: dispDraft.hora_fin }, user.token);
+      }
+      setDispDraft(null);
+      await loadDisponibilidad();
+    } catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo guardar disponibilidad.'); }
+    finally { setDispSaving(false); }
+  };
+
+  const removeDisponibilidad = async (id: number) => {
+    setProfileError('');
+    try { await deleteDisponibilidad(id, user.token); await loadDisponibilidad(); }
+    catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo eliminar disponibilidad.'); }
+  };
+
+  const saveServicio = async () => {
+    if (!servicioDraft || !user.id) return;
+    if (!servicioDraft.abuelo_id) { setServicioError('Indica el abuelo_id.'); return; }
+    setServicioSaving(true);
+    setServicioError('');
+    try {
+      const payload = toApiServicio({ ...servicioDraft, cuidador_id: user.id });
+      if (servicioDraft.id) await updateServicio(servicioDraft.id, payload, user.token);
+      else await createServicio(payload, user.token);
+      setServicioDraft(null);
+      await loadServicios();
+    } catch (e) {
+      setServicioError(e instanceof Error ? e.message : 'No se pudo guardar el servicio.');
+    } finally {
+      setServicioSaving(false);
+    }
+  };
+
+  const removeServicio = async (id: number) => {
+    setServicioError('');
+    try { await deleteServicio(id, user.token); await loadServicios(); }
+    catch (e) { setServicioError(e instanceof Error ? e.message : 'No se pudo eliminar el servicio.'); }
+  };
 
   const openChat = (clientId: string) => {
     setSelectedClientId(clientId);
@@ -144,8 +435,20 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
         <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
           <Text style={styles.pageTitle}>Notificaciones</Text>
           <Text style={styles.subtitle}>Solicitudes, opiniones y novedades de tu perfil.</Text>
+          {!user.caregiverProfile?.verificado && (
+            <Pressable onPress={() => onSelectTab('profile')} style={styles.verificationBanner}>
+              <Text style={styles.verificationBannerTitle}>Verificación pendiente</Text>
+              <Text style={styles.verificationBannerText}>
+                No puedes activarte ni aparecer en el mapa hasta verificar tu cuenta. Sube tu INE y selfie en Perfil.
+              </Text>
+              <Text style={styles.verificationBannerAction}>Ir a verificar →</Text>
+            </Pressable>
+          )}
+          {verificationSent && user.caregiverProfile?.verificado !== true && (
+            <Text style={styles.verificationReviewText}>Documentos enviados. Tu verificación está en revisión.</Text>
+          )}
           <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}><Text style={styles.summaryIconText}>♧</Text></View>
+            <View style={styles.summaryIcon}><Text style={styles.summaryIconText}>N</Text></View>
             <View style={styles.summaryCopy}>
               <Text style={styles.summaryTitle}>Tienes novedades</Text>
               <Text style={styles.summarySubtitle}>Revisa lo que está pasando con tu perfil.</Text>
@@ -237,7 +540,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
                 value={draftMessage}
               />
               <Pressable accessibilityLabel="Enviar mensaje de demostración" onPress={sendMessage} style={styles.sendButton}>
-                <Text style={styles.sendButtonText}>↑</Text>
+                <Text style={styles.sendButtonText}>Enviar</Text>
               </Pressable>
             </View>
           </View>
@@ -265,77 +568,198 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
 
       {tab === 'clients' && (
         <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-          <Text style={styles.pageTitle}>Clientes</Text>
-          <Text style={styles.subtitle}>Familias que te contactaron o con las que has colaborado.</Text>
-          <View style={styles.contactSummary}>
-            <Text style={styles.contactSummaryNumber}>{clients.length}</Text>
-            <Text style={styles.contactSummaryText}>contactos de ejemplo</Text>
-          </View>
-          {clients.map((client) => (
-            <View key={client.id} style={styles.clientCard}>
-              <Avatar initials={client.initials} color={client.color} size={51} />
-              <View style={styles.clientCopy}>
-                <Text style={styles.clientName}>{client.name}</Text>
-                <Text style={styles.clientRelationship}>{client.relationship}</Text>
-                <Text style={styles.clientLocation}>⌖  {client.location}</Text>
+          <Text style={styles.pageTitle}>Servicios</Text>
+          <Text style={styles.subtitle}>Gestiona los servicios que ofreces como cuidador.</Text>
+          <Pressable accessibilityRole="button" onPress={() => setServicioDraft(emptyServicio(user.id ?? 0))} style={styles.saveLocationButton}>
+            <Text style={styles.saveLocationText}>Agregar servicio</Text>
+          </Pressable>
+          {serviciosLoading ? <ActivityIndicator color={colors.tealDark} style={{ marginTop: 12 }} /> : null}
+          {servicioError ? <Text style={styles.locationError}>{servicioError}</Text> : null}
+          {servicios.map((s) => (
+            <View key={s.id} style={styles.detailsCard}>
+              <Text style={styles.sectionTitle}>{s.nota || `Servicio #${s.id}`}</Text>
+              <Text style={styles.detailText}>Abuelo: {s.abuelo_id} · {s.estado} · Pago: {s.estado_pago}</Text>
+              <Text style={styles.profileDescription}>{s.inicio} - {s.fin}</Text>
+              <Text style={styles.profileDescription}>${s.tarifa_hora}/h · Total ${s.total} · Comisión ${s.comision}</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <Pressable onPress={() => setServicioDraft({ ...s })} style={styles.messageAction}><Text style={styles.messageActionText}>Editar</Text></Pressable>
+                <Pressable onPress={() => void removeServicio(s.id)} style={styles.messageAction}><Text style={styles.messageActionText}>Eliminar</Text></Pressable>
               </View>
-              <Pressable accessibilityLabel={`Escribir a ${client.name}`} onPress={() => openChat(client.id)} style={styles.messageAction}>
-                <Text style={styles.messageActionText}>Mensaje</Text>
-              </Pressable>
             </View>
           ))}
-          <Text style={styles.demoNote}>Contactos de ejemplo · no corresponden a clientes reales.</Text>
+          {!serviciosLoading && !servicios.length ? <Text style={styles.demoNote}>No tienes servicios registrados.</Text> : null}
+
+          <Modal visible={!!servicioDraft} animationType="slide" transparent onRequestClose={() => setServicioDraft(null)}>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+                  <Text style={styles.pageTitle}>{servicioDraft?.id ? 'Editar servicio' : 'Nuevo servicio'}</Text>
+                  <TextInput style={styles.locationInput} placeholder="Abuelo ID" keyboardType="numeric" value={servicioDraft?.abuelo_id ? String(servicioDraft.abuelo_id) : ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, abuelo_id: Number(v.replace(/\D/g, '') || 0) } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Nota" value={servicioDraft?.nota ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, nota: v } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Inicio ISO (2026-01-15T08:00:00Z)" value={servicioDraft?.inicio ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, inicio: v } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Fin ISO (2026-01-15T10:00:00Z)" value={servicioDraft?.fin ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, fin: v } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Tarifa hora" keyboardType="numeric" value={String(servicioDraft?.tarifa_hora ?? '')} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, tarifa_hora: Number(v.replace(/[^\d.]/g, '') || 0) } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Total" keyboardType="numeric" value={String(servicioDraft?.total ?? '')} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, total: Number(v.replace(/[^\d.]/g, '') || 0) } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Comisión" keyboardType="numeric" value={String(servicioDraft?.comision ?? '')} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, comision: Number(v.replace(/[^\d.]/g, '') || 0) } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Estado (activo/completado/cancelado)" value={servicioDraft?.estado ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, estado: v } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Estado pago (pendiente/pagado)" value={servicioDraft?.estado_pago ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, estado_pago: v } : d)} />
+                  {servicioError ? <Text style={styles.locationError}>{servicioError}</Text> : null}
+                  <Pressable disabled={servicioSaving} onPress={() => void saveServicio()} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>{servicioSaving ? 'Guardando...' : 'Guardar'}</Text></Pressable>
+                  <Pressable onPress={() => setServicioDraft(null)} style={styles.signOutButton}><Text style={styles.signOutText}>Cancelar</Text></Pressable>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
         </ScrollView>
       )}
 
       {tab === 'profile' && user.caregiverProfile && (
         <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-          <Text style={styles.pageTitle}>Mi perfil</Text>
-          <Text style={styles.subtitle}>Así te verán las familias cuando exploren cuidadores.</Text>
-          <View style={styles.profileCard}>
-            {user.profilePhotoUri ? (
-              <Image source={{ uri: user.profilePhotoUri }} style={styles.profilePhoto} />
-            ) : (
-              <Avatar initials={initialsFor(user.name)} color={colors.tealPale} size={76} />
-            )}
-            <Text style={styles.profileName}>{user.name}</Text>
-            <Text style={styles.profileTitle}>{user.caregiverProfile.professionalTitle}</Text>
-            <View style={styles.profileRoleBadge}>
-              <Text style={styles.profileRoleText}>Perfil de cuidador · demostración</Text>
-            </View>
-          </View>
-
-          <LocationEditor
-            coordinates={user.caregiverProfile.serviceCoordinates}
-            location={user.caregiverProfile.serviceLocation}
-            onSave={onSaveLocation}
-          />
-
+          <Text style={styles.pageTitle}>Mi cuenta</Text>
+          <Text style={styles.subtitle}>Actualiza o elimina tu información personal de cuidador.</Text>
           <View style={styles.detailsCard}>
-            <Text style={styles.sectionTitle}>Tu experiencia</Text>
-            <Text style={styles.detailText}>
-              {user.caregiverProfile.yearsExperience} años · ${user.caregiverProfile.hourlyRate} MXN por hora
-            </Text>
-            <Text style={styles.profileDescription}>{user.caregiverProfile.description}</Text>
-            <View style={styles.specialties}>
-              {user.caregiverProfile.specialties.map((specialty) => (
-                <Text key={specialty} style={styles.specialtyChip}>{specialty}</Text>
-              ))}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.sectionTitle}>Estado</Text>
+              <Pressable onPress={() => {
+                if (!user.caregiverProfile?.verificado) {
+                  Alert.alert(
+                    'Verificación requerida',
+                    'No puedes estar activo si tu cuenta no está verificada. Sube tu INE y selfie en esta misma pantalla.',
+                  );
+                  return;
+                }
+                const next = !profileDraft.disponible;
+                setProfileDraft((d) => ({ ...d, disponible: next }));
+                onUpdateUser({ ...user, caregiverProfile: { ...user.caregiverProfile!, disponible: next } });
+                if (!user.caregiverProfile?.apiId) return;
+                setProfileError('');
+                void (async () => {
+                  try { await updateCuidadorDisponible(user.caregiverProfile!.apiId!, next, user.token); }
+                  catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar disponibilidad, se reintentará al guardar.'); }
+                })();
+              }} style={[styles.switchTrack, profileDraft.disponible && styles.switchTrackOn, !user.caregiverProfile?.verificado && styles.switchTrackDisabled]}>
+                <View style={[styles.switchThumb, profileDraft.disponible && styles.switchThumbOn]} />
+              </Pressable>
             </View>
-          </View>
-
-          <View style={styles.detailsCard}>
-            <Text style={styles.sectionTitle}>Disponibilidad</Text>
-            <Text style={styles.detailText}>{user.caregiverProfile.availability.days.join(', ')}</Text>
             <Text style={styles.profileDescription}>
-              {user.caregiverProfile.availability.startTime}–{user.caregiverProfile.availability.endTime}
+              {!user.caregiverProfile?.verificado
+                ? 'Bloqueado: verifica tu cuenta para poder activarte y aparecer en el mapa.'
+                : profileDraft.disponible
+                  ? 'Activo: visible para recibir servicios.'
+                  : 'Inactivo: no disponible manualmente.'}
             </Text>
           </View>
 
-          <Pressable onPress={onSignOut} style={styles.signOutButton}>
-            <Text style={styles.signOutText}>Cerrar sesión</Text>
-          </Pressable>
-          <Text style={styles.demoNote}>Tu perfil se mantiene solo mientras la app está abierta.</Text>
+          <View style={styles.detailsCard}>
+            <Text style={styles.sectionTitle}>Verificación de cuenta</Text>
+            {user.caregiverProfile?.verificado ? (
+              <Text style={styles.verificationOkText}>Tu cuenta está verificada. Ya puedes activarte y aparecer en el mapa.</Text>
+            ) : (
+              <>
+                <Text style={styles.profileDescription}>
+                  Sube una foto clara de tu INE y un selfie para que un administrador revise tu cuenta. Mientras tanto no puedes estar activo.
+                </Text>
+                <View style={styles.verificationRow}>
+                  <Pressable onPress={() => askVerificationImage('ine')} style={styles.verificationPick}>
+                    {ineUri ? <Image source={{ uri: ineUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar INE</Text>}
+                  </Pressable>
+                  <Pressable onPress={() => askVerificationImage('selfie')} style={styles.verificationPick}>
+                    {selfieUri ? <Image source={{ uri: selfieUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar selfie</Text>}
+                  </Pressable>
+                </View>
+                {verificationSent && <Text style={styles.verificationReviewText}>Documentos enviados. Estamos en revisión.</Text>}
+                {!!verificationError && <Text style={styles.locationError}>{verificationError}</Text>}
+                <Pressable
+                  disabled={verificationSaving}
+                  onPress={() => { void submitVerification(); }}
+                  style={styles.saveLocationButton}
+                >
+                  <Text style={styles.saveLocationText}>
+                    {verificationSaving ? 'Enviando...' : verificationSent ? 'Volver a enviar documentos' : 'Enviar documentos'}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+
+          <View style={styles.detailsCard}>
+            <Text style={styles.sectionTitle}>Información personal</Text>
+            {profileEditing ? (
+              <>
+                <TextInput style={styles.locationInput} placeholder="Nombre" value={profileDraft.name} onChangeText={(v) => setProfileDraft((d) => ({ ...d, name: v }))} />
+                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Teléfono" value={profileDraft.phone} onChangeText={(v) => setProfileDraft((d) => ({ ...d, phone: v }))} />
+                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Título profesional" value={profileDraft.professionalTitle} onChangeText={(v) => setProfileDraft((d) => ({ ...d, professionalTitle: v }))} />
+                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Cédula" value={profileDraft.identificationNumber} onChangeText={(v) => setProfileDraft((d) => ({ ...d, identificationNumber: v }))} />
+                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="RFC" value={profileDraft.rfc} onChangeText={(v) => setProfileDraft((d) => ({ ...d, rfc: v }))} autoCapitalize="characters" />
+                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Descripción" value={profileDraft.description} onChangeText={(v) => setProfileDraft((d) => ({ ...d, description: v }))} multiline />
+                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Años experiencia" keyboardType="numeric" value={profileDraft.yearsExperience} onChangeText={(v) => setProfileDraft((d) => ({ ...d, yearsExperience: v.replace(/\D/g, '') }))} />
+                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Tarifa hora" keyboardType="numeric" value={profileDraft.hourlyRate} onChangeText={(v) => setProfileDraft((d) => ({ ...d, hourlyRate: v.replace(/[^\d.]/g, '') }))} />
+                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Especialidades (coma)" value={profileDraft.specialties} onChangeText={(v) => setProfileDraft((d) => ({ ...d, specialties: v }))} />
+                {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
+                <Pressable disabled={profileSaving} onPress={() => void saveCaregiverProfile()} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>{profileSaving ? 'Guardando...' : 'Guardar cambios'}</Text></Pressable>
+                <Pressable onPress={() => setProfileEditing(false)} style={styles.signOutButton}><Text style={styles.signOutText}>Cancelar</Text></Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.detailText}>{user.name}</Text>
+                <Text style={styles.profileDescription}>{user.email} · {user.phone}</Text>
+                <Text style={styles.profileDescription}>{user.caregiverProfile.professionalTitle} · {user.caregiverProfile.yearsExperience} años · ${user.caregiverProfile.hourlyRate} MXN/h</Text>
+                <Text style={styles.profileDescription}>Cédula: {user.caregiverProfile.identificationNumber} · RFC: {user.caregiverProfile.rfc}</Text>
+                <Text style={styles.profileDescription}>{user.caregiverProfile.description}</Text>
+                <Text style={styles.profileDescription}>Especialidades: {user.caregiverProfile.specialties.join(', ')}</Text>
+                {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
+                <Pressable onPress={() => setProfileEditing(true)} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>Editar información</Text></Pressable>
+                <Pressable disabled={profileSaving} onPress={() => void removeCaregiverProfile()} style={styles.signOutButton}><Text style={styles.signOutText}>{profileSaving ? 'Eliminando...' : 'Eliminar perfil de cuidador'}</Text></Pressable>
+              </>
+            )}
+          </View>
+
+          <LocationEditor coordinates={user.caregiverProfile.serviceCoordinates} location={user.caregiverProfile.serviceLocation} onSave={onSaveLocation} />
+
+          <View style={styles.detailsCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.sectionTitle}>Disponibilidad</Text>
+              <Pressable onPress={() => setDispDraft({ ids: [], dias: [0], hora_inicio: '08:00', hora_fin: '14:00' })} style={styles.messageAction}><Text style={styles.messageActionText}>Agregar</Text></Pressable>
+            </View>
+            {dispLoading ? <ActivityIndicator color={colors.tealDark} /> : null}
+            {disponibilidades.map((d) => (
+              <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                <Text style={[styles.profileDescription, { flex: 1, marginTop: 0 }]}>{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][d.dia_semana] ?? d.dia_semana}: {d.hora_inicio} - {d.hora_fin}</Text>
+                <Pressable onPress={() => setDispDraft({ ids: [d.id], dias: [d.dia_semana], hora_inicio: d.hora_inicio, hora_fin: d.hora_fin })} style={styles.messageAction}><Text style={styles.messageActionText}>Editar</Text></Pressable>
+                <Pressable onPress={() => void removeDisponibilidad(d.id)} style={styles.messageAction}><Text style={styles.messageActionText}>Eliminar</Text></Pressable>
+              </View>
+            ))}
+            {!dispLoading && !disponibilidades.length ? <Text style={styles.profileDescription}>Sin horarios registrados.</Text> : null}
+          </View>
+
+          <Modal visible={!!dispDraft} animationType="slide" transparent onRequestClose={() => setDispDraft(null)}>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+                  <Text style={styles.pageTitle}>{dispDraft?.ids.length ? 'Editar disponibilidad' : 'Nueva disponibilidad'}</Text>
+                  <Text style={styles.sectionTitle}>Días de la semana</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                    {['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map((label, idx) => {
+                      const active = dispDraft?.dias.includes(idx);
+                      return (
+                        <Pressable key={label} onPress={() => setDispDraft((d) => d ? { ...d, dias: active ? d.dias.filter((x) => x !== idx) : [...d.dias, idx] } : d)} style={[styles.dayChip, active && styles.dayChipActive]}>
+                          <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <TextInput style={[styles.locationInput, { marginTop: 12 }]} placeholder="Hora inicio (08:00)" value={dispDraft?.hora_inicio ?? ''} onChangeText={(v) => setDispDraft((d) => d ? { ...d, hora_inicio: v } : d)} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Hora fin (14:00)" value={dispDraft?.hora_fin ?? ''} onChangeText={(v) => setDispDraft((d) => d ? { ...d, hora_fin: v } : d)} />
+                  {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
+                  <Pressable disabled={dispSaving} onPress={() => void saveDisponibilidad()} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>{dispSaving ? 'Guardando...' : 'Guardar'}</Text></Pressable>
+                  <Pressable onPress={() => setDispDraft(null)} style={styles.signOutButton}><Text style={styles.signOutText}>Cancelar</Text></Pressable>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
+          <Pressable disabled={profileSaving} onPress={() => void deleteAccount()} style={styles.signOutButton}><Text style={styles.signOutText}>{profileSaving ? 'Eliminando...' : 'Eliminar cuenta'}</Text></Pressable>
+          <Pressable onPress={onSignOut} style={styles.signOutButton}><Text style={styles.signOutText}>Cerrar sesión</Text></Pressable>
         </ScrollView>
       )}
     </View>
@@ -355,6 +779,7 @@ function LocationEditor({
   const [error, setError] = useState('');
   const [coordinates, setCoordinates] = useState(initialCoordinates);
   const [isLocating, setIsLocating] = useState(false);
+  const [expanded, setExpanded] = useState(!initialCoordinates);
 
   const useCurrentLocation = async () => {
     setIsLocating(true);
@@ -362,67 +787,79 @@ function LocationEditor({
     try {
       const result = await getCurrentServiceLocation();
       if (!result.granted) {
-        setError('Permite el acceso a tu ubicación o escribe tu zona manualmente.');
+        setError('Permite el acceso a tu ubicación para mostrarla en el mapa.');
         return;
       }
-      setValue(result.label);
+      setValue(result.label || value);
       setCoordinates(result.coordinates);
+      setExpanded(false);
     } catch (locationError) {
-      setError(
-        locationError instanceof Error
-          ? `No se pudo obtener la ubicación: ${locationError.message}`
-          : 'No se pudo obtener la ubicación. Escribe tu zona manualmente.',
-      );
+      setError(locationError instanceof Error ? locationError.message : 'No se pudo obtener la ubicación actual.');
     } finally {
       setIsLocating(false);
     }
   };
 
-  const save = () => {
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
     const nextLocation = value.trim();
-    if (!nextLocation) {
-      setError('Escribe una colonia, zona o ciudad.');
+    if (!coordinates) {
+      setError('Usa tu ubicación actual para colocar el pin en el mapa.');
       return;
     }
+    setSaving(true);
     setError('');
-    onSave(nextLocation, coordinates);
+    try {
+      await onSave(nextLocation || 'Ubicación actual', coordinates);
+      setExpanded(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar la ubicación.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <View style={styles.locationCard}>
-      <View style={styles.locationHeading}>
-        <View style={styles.locationIcon}><Text style={styles.locationIconText}>⌖</Text></View>
-        <View>
+      <Pressable onPress={() => setExpanded((v) => !v)} style={styles.locationHeading}>
+        <View style={styles.locationIcon}><View style={styles.pinOuter}><View style={styles.pinInner} /></View></View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.sectionTitle}>Zona de servicio</Text>
-          <Text style={styles.locationHint}>Las familias verán esta ubicación aproximada.</Text>
+          <Text style={styles.locationHint}>{coordinates ? (value || 'Ubicación actual seleccionada') : 'Muestra tu ubicación actual en el mapa y guárdala.'}</Text>
         </View>
-      </View>
-      <TextInput
-        accessibilityLabel="Ubicación del cuidador"
-        onChangeText={(text) => {
-          setValue(text);
-          setCoordinates(undefined);
-          setError('');
-        }}
-        placeholder="Colonia, alcaldía o ciudad"
-        placeholderTextColor="#91A0A3"
-        style={styles.locationInput}
-        value={value}
-      />
-      <Pressable disabled={isLocating} onPress={useCurrentLocation} style={styles.useLocationButton}>
-        <Text style={styles.useLocationText}>
-          {isLocating ? 'Buscando ubicación…' : '⌖  Usar ubicación actual'}
-        </Text>
+        <Text style={styles.useLocationText}>{expanded ? 'Ocultar' : 'Editar'}</Text>
       </Pressable>
-      {!!coordinates && (
-        <Text style={styles.coordinatesNote}>
-          Coordenadas guardadas: {coordinates.latitude.toFixed(5)}, {coordinates.longitude.toFixed(5)}
-        </Text>
-      )}
-      {!!error && <Text accessibilityRole="alert" style={styles.locationError}>{error}</Text>}
-      <Pressable onPress={save} style={styles.saveLocationButton}>
-        <Text style={styles.saveLocationText}>Guardar ubicación</Text>
-      </Pressable>
+
+      {expanded ? (
+        <>
+          <Pressable disabled={isLocating} onPress={useCurrentLocation} style={styles.useLocationButton}>
+            <Text style={styles.useLocationText}>{isLocating ? 'Buscando ubicación...' : 'Usar mi ubicación actual'}</Text>
+          </Pressable>
+          {coordinates ? (
+            <View style={styles.mapPreview}>
+              <OpenStreetMapView
+                center={coordinates}
+                markers={[{ id: 'me', label: value || 'Mi ubicación', rate: 'Zona de servicio', latitude: coordinates.latitude, longitude: coordinates.longitude }]}
+                showCurrentLocation
+              />
+            </View>
+          ) : (
+            <Text style={styles.coordinatesNote}>Aún no has seleccionado tu ubicación en el mapa.</Text>
+          )}
+          <TextInput
+            accessibilityLabel="Ubicación del cuidador"
+            onChangeText={(text) => { setValue(text); setError(''); }}
+            placeholder="Etiqueta de tu zona (opcional)"
+            placeholderTextColor="#91A0A3"
+            style={styles.locationInput}
+            value={value}
+          />
+          {!!error && <Text accessibilityRole="alert" style={styles.locationError}>{error}</Text>}
+          <Pressable disabled={saving} onPress={() => void save()} style={styles.saveLocationButton}>
+            <Text style={styles.saveLocationText}>{saving ? 'Guardando...' : 'Guardar ubicación'}</Text>
+          </Pressable>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -521,12 +958,14 @@ const styles = StyleSheet.create({
   locationCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginTop: 13, padding: 14 },
   locationHeading: { alignItems: 'center', flexDirection: 'row', marginBottom: 12 },
   locationIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 18, height: 36, justifyContent: 'center', marginRight: 9, width: 36 },
-  locationIconText: { color: colors.tealDark, fontSize: 19 },
+  pinOuter: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 8, height: 16, justifyContent: 'center', width: 16 },
+  pinInner: { backgroundColor: colors.white, borderRadius: 3, height: 6, width: 6 },
   sectionTitle: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   locationHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
   locationInput: { backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 11, height: 43, paddingHorizontal: 11 },
   useLocationButton: { alignSelf: 'flex-start', backgroundColor: colors.tealPale, borderRadius: 10, marginTop: 8, paddingHorizontal: 10, paddingVertical: 8 },
   useLocationText: { color: colors.tealDark, fontSize: 9, fontWeight: '700' },
+  mapPreview: { borderRadius: 12, height: 190, marginTop: 10, overflow: 'hidden' },
   coordinatesNote: { color: colors.muted, fontSize: 9, marginTop: 7 },
   locationError: { color: '#C74C45', fontSize: 10, marginTop: 6 },
   saveLocationButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 10, marginTop: 9, paddingVertical: 10 },
@@ -538,4 +977,26 @@ const styles = StyleSheet.create({
   specialtyChip: { backgroundColor: colors.tealPale, borderRadius: 11, color: colors.tealDark, fontSize: 9, marginBottom: 5, marginRight: 5, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 6 },
   signOutButton: { alignItems: 'center', borderColor: colors.line, borderRadius: 12, borderWidth: 1, marginTop: 14, paddingVertical: 12 },
   signOutText: { color: colors.tealDark, fontSize: 11, fontWeight: '700' },
+  modalBackdrop: { backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, justifyContent: 'flex-end' },
+  modalCard: { backgroundColor: colors.canvas, borderTopLeftRadius: 18, borderTopRightRadius: 18, maxHeight: '92%' },
+  modalContent: { padding: 16, paddingBottom: 28 },
+  switchTrack: { width: 48, height: 28, borderRadius: 14, backgroundColor: '#C7D4D6', padding: 2 },
+  switchTrackOn: { backgroundColor: colors.tealDark },
+  switchTrackDisabled: { opacity: 0.45 },
+  switchThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.white },
+  switchThumbOn: { marginLeft: 20 },
+  dayChip: { borderColor: colors.line, borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.white },
+  dayChipActive: { backgroundColor: colors.tealDark, borderColor: colors.tealDark },
+  dayChipText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
+  dayChipTextActive: { color: colors.white },
+  verificationBanner: { backgroundColor: '#FFF6E2', borderColor: colors.gold, borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 13 },
+  verificationBannerTitle: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  verificationBannerText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 5 },
+  verificationBannerAction: { color: colors.tealDark, fontSize: 10, fontWeight: '800', marginTop: 8 },
+  verificationReviewText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', marginTop: 9 },
+  verificationOkText: { color: colors.green, fontSize: 11, fontWeight: '700', marginTop: 8 },
+  verificationRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  verificationPick: { alignItems: 'center', backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 12, borderWidth: 1, flex: 1, height: 96, justifyContent: 'center', overflow: 'hidden' },
+  verificationPickText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', textAlign: 'center' },
+  verificationPreview: { height: 96, width: '100%' },
 });

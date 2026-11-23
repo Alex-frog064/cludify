@@ -27,7 +27,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permite que Qualify seleccione tu foto de perfil."
+          "photosPermission": "Permite que Qualify seleccione tus documentos de verificación.",
+          "cameraPermission": "Permite que Qualify tome fotos para verificar tu cuenta."
         }
       ]
     ]

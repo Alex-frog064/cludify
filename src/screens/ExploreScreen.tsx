@@ -4,11 +4,13 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDim
 import * as Location from 'expo-location';
 import { CaregiverCard } from '../components/CaregiverCard';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
-import { caregivers } from '../data/caregivers';
+import { getCuidadoresMapa } from '../api/auth';
 import { Caregiver, Coordinates } from '../types';
 import { colors } from '../theme';
+import { filterNearbyCaregivers, mapCaregiver, nearbyRadiusKm } from '../utils/nearbyCaregivers';
+import type { NearbyCaregiver } from '../utils/nearbyCaregivers';
 
-type Props = { onSelectCaregiver: (caregiver: Caregiver) => void };
+type Props = { onSelectCaregiver: (caregiver: Caregiver) => void; token?: string };
 type LocationStatus = 'loading' | 'ready' | 'denied' | 'error';
 type FilterIcon = 'time-outline' | 'heart-outline' | 'options-outline';
 
@@ -18,18 +20,15 @@ const filters: { label: string; icon: FilterIcon }[] = [
   { label: 'Filtros', icon: 'options-outline' },
 ];
 const defaultLocation: Coordinates = { latitude: 19.3869, longitude: -99.1627 };
-const sampleClients = [
-  { id: 'client-1', label: 'Cliente de ejemplo 1', rate: '$180/h', latitudeOffset: 0.006, longitudeOffset: 0.004 },
-  { id: 'client-2', label: 'Cliente de ejemplo 2', rate: '$200/h', latitudeOffset: -0.004, longitudeOffset: 0.008 },
-  { id: 'client-3', label: 'Cliente de ejemplo 3', rate: '$160/h', latitudeOffset: 0.003, longitudeOffset: -0.007 },
-];
 
-export function ExploreScreen({ onSelectCaregiver }: Props) {
+export function ExploreScreen({ onSelectCaregiver, token }: Props) {
   const [activeFilter, setActiveFilter] = useState('Hoy');
-  const [location, setLocation] = useState('Mi ubicación · Del Valle');
+  const [location, setLocation] = useState('Mi ubicación');
   const [currentLocation, setCurrentLocation] = useState<Coordinates | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('loading');
   const [showCaregivers, setShowCaregivers] = useState(false);
+  const [caregivers, setCaregivers] = useState<NearbyCaregiver[]>([]);
+  const [mapError, setMapError] = useState('');
   const { height: windowHeight } = useWindowDimensions();
 
   const locateUser = useCallback(async () => {
@@ -58,24 +57,57 @@ export function ExploreScreen({ onSelectCaregiver }: Props) {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void locateUser();
-    }, 0);
+    const timer = setTimeout(() => { void locateUser(); }, 0);
     return () => clearTimeout(timer);
   }, [locateUser]);
 
-  const locationCenter = currentLocation ?? defaultLocation;
-  const mapHeight = Math.min(460, Math.max(280, windowHeight * (showCaregivers ? 0.28 : 0.54)));
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    const loadCaregivers = async () => {
+      try {
+        const data = await getCuidadoresMapa(token);
+        if (!active) return;
+        setCaregivers(data.map(mapCaregiver).filter((c): c is NearbyCaregiver => !!c));
+        setMapError('');
+      } catch (e) {
+        if (active) {
+          setCaregivers([]);
+          setMapError(e instanceof Error ? e.message : 'No se pudieron cargar cuidadores.');
+        }
+      }
+    };
+    void loadCaregivers();
+    const interval = setInterval(() => { void loadCaregivers(); }, 30000);
+    return () => { active = false; clearInterval(interval); };
+  }, [token]);
+
+  const visibleCaregivers = useMemo(() => {
+    if (!token) return [];
+    return filterNearbyCaregivers(caregivers, currentLocation);
+  }, [caregivers, token, currentLocation]);
   const mapMarkers = useMemo(
-    () => sampleClients.map((client) => ({
-      id: client.id,
-      label: client.label,
-      rate: client.rate,
-      latitude: locationCenter.latitude + client.latitudeOffset,
-      longitude: locationCenter.longitude + client.longitudeOffset,
+    () => visibleCaregivers.filter((c) => c.lat != null && c.lng != null).map((c) => ({
+      id: c.id,
+      label: c.name,
+      rate: `$${c.hourlyRate}/h`,
+      latitude: c.lat as number,
+      longitude: c.lng as number,
+      title: c.title,
+      location: c.location,
     })),
-    [locationCenter.latitude, locationCenter.longitude],
+    [visibleCaregivers],
   );
+  const handleMarkerPress = useCallback((id: string) => {
+    const caregiver = visibleCaregivers.find((item) => item.id === id);
+    if (caregiver) onSelectCaregiver(caregiver);
+  }, [visibleCaregivers, onSelectCaregiver]);
+  const locationCenter = useMemo(() => {
+    if (currentLocation) return currentLocation;
+    if (mapMarkers.length) return { latitude: mapMarkers[0].latitude, longitude: mapMarkers[0].longitude };
+    return defaultLocation;
+  }, [currentLocation, mapMarkers]);
+  const mapHeight = Math.min(460, Math.max(280, windowHeight * (showCaregivers ? 0.28 : 0.54)));
   const statusText = {
     loading: 'Buscando tu ubicación…',
     ready: 'Ubicación actual',
@@ -130,8 +162,18 @@ export function ExploreScreen({ onSelectCaregiver }: Props) {
           <OpenStreetMapView
             center={locationCenter}
             markers={mapMarkers}
+            onMarkerPress={handleMarkerPress}
             showCurrentLocation={locationStatus === 'ready'}
           />
+          {!mapMarkers.length ? (
+            <Text style={styles.noMapText}>
+              {!token
+                ? 'Inicia sesión para ver los cuidadores en el mapa.'
+                : mapError || (currentLocation
+                  ? `No hay cuidadores activos a menos de ${nearbyRadiusKm} km. Deben estar verificados y con ubicación reciente (2 min).`
+                  : 'No hay cuidadores activos en el mapa. Activa la ubicación para filtrar por cercanía.')}
+            </Text>
+          ) : null}
 
           <View style={styles.filterRow}>
             {filters.map((filter) => (
@@ -174,13 +216,19 @@ export function ExploreScreen({ onSelectCaregiver }: Props) {
             <View>
               <Text style={styles.resultsTitle}>Cuidadores destacados</Text>
               <Text style={styles.resultsSubtitle}>
-                {showCaregivers ? 'Perfiles para cuidar con tranquilidad' : 'Toca para ver perfiles cercanos'}
+                {currentLocation
+                  ? showCaregivers
+                    ? `Hasta ${nearbyRadiusKm} km desde tu ubicación`
+                    : `Toca para ver perfiles a ${nearbyRadiusKm} km a la redonda`
+                  : showCaregivers
+                    ? 'Ubicación desactivada · se muestran todos'
+                    : 'Toca para ver los perfiles disponibles'}
               </Text>
             </View>
             <View style={styles.resultsActions}>
               <View style={styles.resultsCount}>
                 <Ionicons color={colors.tealDark} name="people-outline" size={13} />
-                <Text style={styles.resultsCountText}>{caregivers.length}</Text>
+                  <Text style={styles.resultsCountText}>{visibleCaregivers.length}</Text>
               </View>
               <Ionicons
                 color={colors.tealDark}
@@ -194,7 +242,7 @@ export function ExploreScreen({ onSelectCaregiver }: Props) {
           <View style={styles.resultsHeading}>
             <Text style={styles.sectionEyebrow}>DISPONIBLES CERCA DE TI</Text>
           </View>
-          {caregivers.map((caregiver, index) => (
+          {visibleCaregivers.map((caregiver, index) => (
             <CaregiverCard
               caregiver={caregiver}
               key={caregiver.id}
@@ -273,6 +321,7 @@ const styles = StyleSheet.create({
   statusDot: { backgroundColor: colors.gold, borderRadius: 3, height: 6, marginRight: 6, width: 6 },
   readyDot: { backgroundColor: colors.green },
   mapStatusText: { color: colors.ink, fontSize: 9, fontWeight: '700' },
+  noMapText: { position: 'absolute', top: 52, left: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 10, padding: 8, color: colors.muted, fontSize: 10, textAlign: 'center' },
   mapControl: {
     alignItems: 'center',
     backgroundColor: colors.white,

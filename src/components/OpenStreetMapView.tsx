@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import WebView from 'react-native-webview';
-import { createLeafletMapHtml } from '../utils/leafletMapHtml';
+import { createLeafletMapHtml, parseMapMarkerMessage } from '../utils/leafletMapHtml';
 import { colors } from '../theme';
 import type { Coordinates, MapMarker } from '../types';
 
@@ -9,9 +9,10 @@ type Props = {
   center: Coordinates;
   markers: MapMarker[];
   showCurrentLocation: boolean;
+  onMarkerPress?: (id: string) => void;
 };
 
-export function OpenStreetMapView({ center, markers, showCurrentLocation }: Props) {
+export function OpenStreetMapView({ center, markers, showCurrentLocation, onMarkerPress }: Props) {
   const { latitude, longitude } = center;
   const html = useMemo(
     () => createLeafletMapHtml({ latitude, longitude }, markers, showCurrentLocation),
@@ -22,6 +23,10 @@ export function OpenStreetMapView({ center, markers, showCurrentLocation }: Prop
     <WebView
       bounces={false}
       javaScriptEnabled
+      onMessage={(event) => {
+        const id = parseMapMarkerMessage(event.nativeEvent.data);
+        if (id) onMarkerPress?.(id);
+      }}
       originWhitelist={['*']}
       renderLoading={() => (
         <View style={styles.loading}>

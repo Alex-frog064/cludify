@@ -14,10 +14,10 @@ export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare }: Pro
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <Pressable accessibilityLabel="Volver" onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backText}>‹</Text>
+            <Text style={styles.backText}>{"<"}</Text>
           </Pressable>
           <Pressable accessibilityLabel="Guardar en favoritos" style={styles.favorite}>
-            <Text style={styles.favoriteText}>♡</Text>
+            <Text style={styles.favoriteText}>Fav</Text>
           </Pressable>
           <Image source={{ uri: caregiver.image }} style={styles.photo} />
           <Text style={styles.name}>{caregiver.name}</Text>
@@ -26,7 +26,7 @@ export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare }: Pro
         </View>
 
         <View style={styles.stats}>
-          <Stat value={`★ ${caregiver.rating}`} label={`${caregiver.reviews} reseñas`} />
+          <Stat value={caregiver.rating} label={`${caregiver.reviews} reseñas`} />
           <View style={styles.divider} />
           <Stat value={`${caregiver.yearsExperience} años`} label="de experiencia" />
           <View style={styles.divider} />
@@ -44,7 +44,7 @@ export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare }: Pro
         <Section title="Sobre mí">
           <Text style={styles.body}>{caregiver.about}</Text>
           <View style={styles.verifiedLine}>
-            <Text style={styles.check}>✓</Text>
+            <Text style={styles.check}>•</Text>
             <Text style={styles.verifiedText}>Identidad verificada</Text>
           </View>
         </Section>
@@ -66,7 +66,7 @@ export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare }: Pro
               “Mi mamá se sintió en confianza desde el primer día. María es atenta y muy puntual.”
             </Text>
             <Text style={styles.reviewBy}>Lucía · hace 2 semanas</Text>
-            <Text style={styles.stars}>★★★★★</Text>
+            <Text style={styles.stars}>{caregiver.rating}</Text>
           </View>
         </Section>
       </ScrollView>
@@ -77,7 +77,7 @@ export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare }: Pro
           <Text style={styles.bodySmall}>Sin cobro hasta confirmar</Text>
         </View>
         <Pressable onPress={onRequestCare} style={styles.requestButton}>
-          <Text style={styles.requestText}>Solicitar cuidado  →</Text>
+          <Text style={styles.requestText}>Solicitar cuidado</Text>
         </Pressable>
       </View>
     </View>

@@ -18,7 +18,7 @@ import { CaregiverAvailability, Coordinates, UserAccount } from '../types';
 type Props = {
   account: UserAccount;
   onCancel: () => void;
-  onComplete: (user: UserAccount) => void;
+  onComplete: (user: UserAccount) => Promise<void> | void;
 };
 
 type Draft = {
@@ -49,6 +49,7 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
   const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [error, setError] = useState('');
   const [isLocating, setIsLocating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [draft, setDraft] = useState<Draft>({
     identificationNumber: '',
     rfc: '',
@@ -122,15 +123,11 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
     });
   };
 
-  const continueSetup = () => {
+  const continueSetup = async () => {
+    if (submitting) return;
     setError('');
     if (step === 0) {
-      if (
-        !draft.identificationNumber.trim() ||
-        !draft.rfc.trim() ||
-        !draft.professionalTitle.trim() ||
-        !draft.serviceLocation.trim()
-      ) {
+      if (!draft.identificationNumber.trim() || !draft.rfc.trim() || !draft.professionalTitle.trim() || !draft.serviceLocation.trim()) {
         setError('Completa tu título, cédula, RFC y zona de servicio.');
         return;
       }
@@ -139,56 +136,61 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
     }
 
     if (step === 1) {
-      const years = Number(draft.yearsExperience);
-      const rate = Number(draft.hourlyRate);
-      if (
-        !draft.description.trim() ||
-        !draft.yearsExperience.trim() ||
-        !Number.isFinite(years) ||
-        years < 0 ||
-        !draft.hourlyRate.trim() ||
-        !Number.isFinite(rate) ||
-        rate <= 0
-      ) {
-        setError('Agrega una descripción, tus años de experiencia y una tarifa válida.');
+      const yearsExperience = Number(draft.yearsExperience);
+      const hourlyRate = Number(draft.hourlyRate);
+      if (!draft.description.trim() || !draft.yearsExperience || !draft.hourlyRate) {
+        setError('Comparte tu experiencia, tarifa y una breve descripción.');
         return;
       }
-      if (draft.specialties.length === 0) {
-        setError('Elige al menos una especialidad.');
+      if (Number.isNaN(yearsExperience) || Number.isNaN(hourlyRate) || yearsExperience < 0 || hourlyRate <= 0) {
+        setError('Revisa los años de experiencia y la tarifa por hora.');
+        return;
+      }
+      if (!draft.specialties.length) {
+        setError('Selecciona al menos una especialidad.');
         return;
       }
       setStep(2);
       return;
     }
 
-    if (draft.availability.days.length === 0 || !isValidTimeRange(draft.availability.startTime, draft.availability.endTime)) {
-      setError('Elige al menos un día y un horario válido.');
+    if (!draft.availability.days.length) {
+      setError('Selecciona al menos un día de disponibilidad.');
+      return;
+    }
+    if (!isValidTimeRange(draft.availability.startTime, draft.availability.endTime)) {
+      setError('Ingresa un horario válido, por ejemplo de 08:00 a 17:00.');
       return;
     }
 
-    onComplete({
-      ...account,
-      profilePhotoUri: photoUri,
-      caregiverProfile: {
-        identificationNumber: draft.identificationNumber.trim(),
-        rfc: draft.rfc.trim().toUpperCase(),
-        professionalTitle: draft.professionalTitle.trim(),
-        serviceLocation: draft.serviceLocation.trim(),
-        serviceCoordinates: draft.serviceCoordinates,
-        description: draft.description.trim(),
-        yearsExperience: Number(draft.yearsExperience),
-        hourlyRate: Number(draft.hourlyRate),
-        specialties: draft.specialties,
-        availability: draft.availability,
-      },
-    });
+    setSubmitting(true);
+    try {
+      await onComplete({
+        ...account,
+        profilePhotoUri: photoUri,
+        caregiverProfile: {
+          identificationNumber: draft.identificationNumber.trim(),
+          rfc: draft.rfc.trim().toUpperCase(),
+          professionalTitle: draft.professionalTitle.trim(),
+          serviceLocation: draft.serviceLocation.trim(),
+          serviceCoordinates: draft.serviceCoordinates,
+          description: draft.description.trim(),
+          yearsExperience: Number(draft.yearsExperience),
+          hourlyRate: Number(draft.hourlyRate),
+          specialties: draft.specialties,
+          availability: draft.availability,
+        },
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         <Pressable accessibilityLabel={step === 0 ? 'Salir del registro' : 'Paso anterior'} onPress={step === 0 ? onCancel : () => setStep(step - 1)} style={styles.backButton}>
-          <Text style={styles.backText}>‹</Text>
+          <Text style={styles.backText}>{"<"}</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Perfil de cuidador</Text>
         <Text style={styles.stepCount}>{step + 1} de 3</Text>
@@ -306,7 +308,7 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
                     style={[styles.chip, selected && styles.selectedChip]}
                   >
                     <Text style={[styles.chipText, selected && styles.selectedChipText]}>
-                      {selected ? '✓  ' : '+  '}{specialty}
+                      {selected ? '• ' : '+ '}{specialty}
                     </Text>
                   </Pressable>
                 );
@@ -370,8 +372,8 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
 
       <View style={styles.footer}>
         <Text style={styles.footerNote}>Tu información no se guarda ni se comparte.</Text>
-        <Pressable onPress={continueSetup} style={styles.continueButton}>
-          <Text style={styles.continueText}>{step === 2 ? 'Crear perfil' : 'Continuar'}  →</Text>
+        <Pressable disabled={submitting} onPress={() => void continueSetup()} style={[styles.continueButton, submitting && { opacity: 0.7 }]}>
+          <Text style={styles.continueText}>{submitting ? 'Guardando...' : step === 2 ? 'Crear perfil' : 'Continuar'}</Text>
         </Pressable>
       </View>
     </View>
