@@ -48,6 +48,8 @@ export type CuidadorPayload = {
   especialidades: string;
 };
 
+export type CuidadorUpdatePayload = Omit<CuidadorPayload, 'usuario_id'>;
+
 export type GeocercaPayload = {
   abuelo_id: number;
   nombre: string;
@@ -213,7 +215,7 @@ export function createCuidador(payload: CuidadorPayload, token?: string) {
   return request<Record<string, unknown>>('/cuidadores', payload, token);
 }
 
-export function updateCuidador(id: number, payload: CuidadorPayload, token?: string) {
+export function updateCuidador(id: number, payload: CuidadorUpdatePayload, token?: string) {
   return request<Record<string, unknown>>(`/cuidadores/${id}`, payload, token, 'PUT');
 }
 

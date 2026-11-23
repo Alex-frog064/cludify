@@ -289,15 +289,6 @@ export default function App() {
               setSignedInUser(null);
               setActiveTab('explore');
             }}
-            onBecomeCaregiver={() => {
-              if (!signedInUser) return;
-              if (signedInUser.caregiverProfile) {
-                setSignedInUser({ ...signedInUser, role: 'caregiver' });
-                setActiveTab('notifications');
-                return;
-              }
-              setCaregiverSetup(signedInUser);
-            }}
             onSaveCareRecipient={(recipient) => {
               setSignedInUser((current) => {
                 if (!current || current.role !== 'family') return current;

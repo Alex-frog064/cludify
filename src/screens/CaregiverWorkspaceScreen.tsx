@@ -13,11 +13,12 @@ import {
   View,
 } from 'react-native';
 import { CaregiverTabKey, TabKey } from '../components/BottomTabBar';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
-import { createDisponibilidad, createServicio, deleteCuidador, deleteDisponibilidad, deleteServicio, deleteUsuario, getDisponibilidad, getServicios, subirDocumentosVerificacion, updateCuidador, updateCuidadorDisponible, updateDisponibilidad, updateServicio } from '../api/auth';
+import { createServicio, deleteCuidador, deleteServicio, deleteUsuario, getCuidadores, getServicios, subirDocumentosVerificacion, updateCuidador, updateCuidadorDisponible, updateServicio, updateUsuario } from '../api/auth';
 import { colors } from '../theme';
 import { getCurrentServiceLocation } from '../utils/currentServiceLocation';
-import { Coordinates, Disponibilidad, Servicio, UserAccount } from '../types';
+import { Coordinates, Servicio, UserAccount } from '../types';
 
 type Props = {
   tab: CaregiverTabKey;
@@ -29,6 +30,7 @@ type Props = {
 };
 
 type NotificationCategory = 'Todas' | 'Solicitudes' | 'Opiniones' | 'Ofertas' | 'Mensajes';
+type ProfileConfirmation = 'discardProfile' | 'removeProfile' | 'deleteAccount';
 
 const categories: NotificationCategory[] = ['Todas', 'Solicitudes', 'Opiniones', 'Ofertas', 'Mensajes'];
 
@@ -153,11 +155,8 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
   const [servicioError, setServicioError] = useState('');
   const [servicioDraft, setServicioDraft] = useState<Servicio | null>(null);
   const [servicioSaving, setServicioSaving] = useState(false);
-  const [disponibilidades, setDisponibilidades] = useState<Disponibilidad[]>([]);
-  const [dispLoading, setDispLoading] = useState(false);
-  const [dispDraft, setDispDraft] = useState<{ ids: number[]; dias: number[]; hora_inicio: string; hora_fin: string } | null>(null);
-  const [dispSaving, setDispSaving] = useState(false);
   const [profileEditing, setProfileEditing] = useState(false);
+  const [profileConfirmation, setProfileConfirmation] = useState<ProfileConfirmation | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [ineUri, setIneUri] = useState<string | null>(null);
@@ -178,20 +177,6 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
     disponible: !!user.caregiverProfile?.disponible,
   });
 
-  useEffect(() => {
-    setProfileDraft({
-      name: user.name,
-      phone: user.phone,
-      identificationNumber: user.caregiverProfile?.identificationNumber ?? '',
-      rfc: user.caregiverProfile?.rfc ?? '',
-      professionalTitle: user.caregiverProfile?.professionalTitle ?? '',
-      description: user.caregiverProfile?.description ?? '',
-      yearsExperience: String(user.caregiverProfile?.yearsExperience ?? ''),
-      hourlyRate: String(user.caregiverProfile?.hourlyRate ?? ''),
-      specialties: (user.caregiverProfile?.specialties ?? []).join(', '),
-      disponible: !!user.caregiverProfile?.disponible,
-    });
-  }, [user]);
 
   const pickVerificationImage = async (kind: 'ine' | 'selfie', source: 'camera' | 'library') => {
     try {
@@ -255,11 +240,25 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
   };
 
   const saveCaregiverProfile = async () => {
-    if (!user.id || !user.caregiverProfile) return;
+    if (!user.id) {
+      setProfileError('No se encontró el ID de tu cuenta. Vuelve a iniciar sesión e intenta de nuevo.');
+      return;
+    }
+    if (!user.caregiverProfile) return;
     setProfileSaving(true); setProfileError('');
     try {
+      let caregiverId = user.caregiverProfile.apiId;
+      if (!caregiverId) {
+        const caregivers = await getCuidadores(user.token);
+        const found = caregivers.find((item) => Number(item.usuario_id) === user.id);
+        const foundId = Number(found?.id);
+        if (Number.isFinite(foundId) && foundId > 0) caregiverId = foundId;
+      }
+      if (!caregiverId) {
+        throw new Error('No se encontró tu perfil de cuidador en el servidor.');
+      }
+
       const payload = {
-        usuario_id: user.id,
         cedula: profileDraft.identificationNumber.trim(),
         titulo: profileDraft.professionalTitle.trim(),
         rfc: profileDraft.rfc.trim().toUpperCase(),
@@ -267,14 +266,23 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
         anios_experiencia: Number(profileDraft.yearsExperience || 0),
         tarifa_hora: Number(profileDraft.hourlyRate || 0),
         especialidades: profileDraft.specialties.split(',').map((s) => s.trim()).filter(Boolean).join(', '),
+        verificado: user.caregiverProfile.verificado === true,
       };
-      if (user.caregiverProfile.apiId) await updateCuidador(user.caregiverProfile.apiId, payload, user.token);
+      await updateCuidador(caregiverId, payload, user.token);
+
+      const name = profileDraft.name.trim();
+      const phone = profileDraft.phone.trim();
+      if (name !== user.name || phone !== user.phone) {
+        await updateUsuario(user.id, { nombre: name, telefono: phone }, user.token);
+      }
+
       onUpdateUser({
         ...user,
-        name: profileDraft.name.trim(),
-        phone: profileDraft.phone.trim(),
+        name,
+        phone,
         caregiverProfile: {
           ...user.caregiverProfile,
+          apiId: caregiverId,
           identificationNumber: payload.cedula,
           professionalTitle: payload.titulo,
           rfc: payload.rfc,
@@ -313,6 +321,35 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
     finally { setProfileSaving(false); }
   };
 
+  const startEditingProfile = () => {
+    setProfileDraft({
+      name: user.name,
+      phone: user.phone,
+      identificationNumber: user.caregiverProfile?.identificationNumber ?? '',
+      rfc: user.caregiverProfile?.rfc ?? '',
+      professionalTitle: user.caregiverProfile?.professionalTitle ?? '',
+      description: user.caregiverProfile?.description ?? '',
+      yearsExperience: String(user.caregiverProfile?.yearsExperience ?? ''),
+      hourlyRate: String(user.caregiverProfile?.hourlyRate ?? ''),
+      specialties: (user.caregiverProfile?.specialties ?? []).join(', '),
+      disponible: !!user.caregiverProfile?.disponible,
+    });
+    setProfileError('');
+    setProfileEditing(true);
+  };
+
+  const confirmProfileAction = async () => {
+    if (!profileConfirmation) return;
+    if (profileConfirmation === 'discardProfile') {
+      setProfileEditing(false);
+    } else if (profileConfirmation === 'removeProfile') {
+      await removeCaregiverProfile();
+    } else if (profileConfirmation === 'deleteAccount') {
+      await deleteAccount();
+    }
+    setProfileConfirmation(null);
+  };
+
   const loadServicios = async () => {
     if (!user.id) return;
     setServiciosLoading(true);
@@ -342,52 +379,11 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
     }
   };
 
-  const loadDisponibilidad = async () => {
-    const cuidadorId = user.caregiverProfile?.apiId;
-    if (!cuidadorId) return;
-    setDispLoading(true);
-    try {
-      const data = await getDisponibilidad(user.token);
-      setDisponibilidades(data.filter((r) => Number(r.cuidador_id) === cuidadorId).map((r) => ({
-        id: Number(r.id), cuidador_id: Number(r.cuidador_id), dia_semana: Number(r.dia_semana),
-        hora_inicio: String(r.hora_inicio ?? ''), hora_fin: String(r.hora_fin ?? ''),
-      })));
-    } catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo cargar disponibilidad.'); }
-    finally { setDispLoading(false); }
-  };
-
-  useEffect(() => { if (tab === 'clients') void loadServicios(); }, [tab, user.id, user.token]);
-  useEffect(() => { if (tab === 'profile') void loadDisponibilidad(); }, [tab, user.caregiverProfile?.apiId, user.token]);
-
-  const saveDisponibilidad = async () => {
-    const cuidadorId = user.caregiverProfile?.apiId;
-    if (!dispDraft) return;
-    if (!cuidadorId) { setProfileError('No se encontró tu perfil de cuidador. Vuelve a iniciar sesión.'); return; }
-    if (!user.token) { setProfileError('Tu sesión no tiene token. Cierra sesión e inicia de nuevo.'); return; }
-    if (!dispDraft.dias.length) { setProfileError('Selecciona al menos un día.'); return; }
-    setDispSaving(true); setProfileError('');
-    try {
-      const selected = [...dispDraft.dias].sort((a,b)=>a-b);
-      if (dispDraft.ids.length) {
-        const first = selected[0];
-        await updateDisponibilidad(dispDraft.ids[0], { cuidador_id: cuidadorId, dia_semana: first, hora_inicio: dispDraft.hora_inicio, hora_fin: dispDraft.hora_fin }, user.token);
-        for (const id of dispDraft.ids.slice(1)) await deleteDisponibilidad(id, user.token);
-        for (const dia of selected.slice(1)) await createDisponibilidad({ cuidador_id: cuidadorId, dia_semana: dia, hora_inicio: dispDraft.hora_inicio, hora_fin: dispDraft.hora_fin }, user.token);
-      } else {
-        for (const dia of selected) await createDisponibilidad({ cuidador_id: cuidadorId, dia_semana: dia, hora_inicio: dispDraft.hora_inicio, hora_fin: dispDraft.hora_fin }, user.token);
-      }
-      setDispDraft(null);
-      await loadDisponibilidad();
-    } catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo guardar disponibilidad.'); }
-    finally { setDispSaving(false); }
-  };
-
-  const removeDisponibilidad = async (id: number) => {
-    setProfileError('');
-    try { await deleteDisponibilidad(id, user.token); await loadDisponibilidad(); }
-    catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo eliminar disponibilidad.'); }
-  };
-
+  useEffect(() => {
+    if (tab !== 'clients') return;
+    const timeout = setTimeout(() => { void loadServicios(); }, 0);
+    return () => clearTimeout(timeout);
+  }, [tab, user.id, user.token]);
   const saveServicio = async () => {
     if (!servicioDraft || !user.id) return;
     if (!servicioDraft.abuelo_id) { setServicioError('Indica el abuelo_id.'); return; }
@@ -614,152 +610,189 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
       )}
 
       {tab === 'profile' && user.caregiverProfile && (
-        <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-          <Text style={styles.pageTitle}>Mi cuenta</Text>
-          <Text style={styles.subtitle}>Actualiza o elimina tu información personal de cuidador.</Text>
-          <View style={styles.detailsCard}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.sectionTitle}>Estado</Text>
-              <Pressable onPress={() => {
-                if (!user.caregiverProfile?.verificado) {
-                  Alert.alert(
-                    'Verificación requerida',
-                    'No puedes estar activo si tu cuenta no está verificada. Sube tu INE y selfie en esta misma pantalla.',
-                  );
-                  return;
-                }
-                const next = !profileDraft.disponible;
-                setProfileDraft((d) => ({ ...d, disponible: next }));
-                onUpdateUser({ ...user, caregiverProfile: { ...user.caregiverProfile!, disponible: next } });
-                if (!user.caregiverProfile?.apiId) return;
-                setProfileError('');
-                void (async () => {
-                  try { await updateCuidadorDisponible(user.caregiverProfile!.apiId!, next, user.token); }
-                  catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar disponibilidad, se reintentará al guardar.'); }
-                })();
-              }} style={[styles.switchTrack, profileDraft.disponible && styles.switchTrackOn, !user.caregiverProfile?.verificado && styles.switchTrackDisabled]}>
-                <View style={[styles.switchThumb, profileDraft.disponible && styles.switchThumbOn]} />
-              </Pressable>
+        <ScrollView contentContainerStyle={styles.profilePage} showsVerticalScrollIndicator={false}>
+          <View style={styles.profileHero}>
+            <View style={styles.profileTopLine}>
+              <Text style={styles.profilePageTitle}>Perfil</Text>
+              <View style={[styles.profileCheckBadge, user.caregiverProfile.verificado && styles.profileCheckBadgeVerified]}>
+                <Text style={[styles.profileCheckText, user.caregiverProfile.verificado && styles.profileCheckTextVerified]}>
+                  {user.caregiverProfile.verificado ? '✓' : '!'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.profilePortrait}>
+              <View style={styles.profilePortraitRing}>
+                {user.profilePhotoUri ? (
+                  <Image source={{ uri: user.profilePhotoUri }} style={styles.profilePortraitImage} />
+                ) : (
+                  <Text style={styles.profilePortraitInitial}>{user.name.charAt(0).toUpperCase()}</Text>
+                )}
+              </View>
+            </View>
+            <View style={styles.profileSummaryCard}>
+              <View style={styles.profileNameLine}>
+                <View style={styles.profileNameCopy}>
+                  <Text style={styles.profileDisplayName}>{user.name}</Text>
+                  <Text style={styles.profileDisplaySubtitle}>{user.caregiverProfile.professionalTitle || 'Cuidador profesional'}</Text>
+                </View>
+                <View style={[styles.profileRoleBadge, user.caregiverProfile.verificado && styles.profileRoleBadgeVerified]}>
+                  <Text style={[styles.profileRoleBadgeText, user.caregiverProfile.verificado && styles.profileRoleBadgeTextVerified]}>
+                    {user.caregiverProfile.verificado ? 'Verificado' : 'Cuidador'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.profileStats}>
+                <ProfileStat value={`${user.caregiverProfile.yearsExperience}`} label="Años exp." />
+                <View style={styles.profileStatDivider} />
+                <ProfileStat value={`$${user.caregiverProfile.hourlyRate}`} label="MXN / hora" />
+                <View style={styles.profileStatDivider} />
+                <ProfileStat value={`${user.caregiverProfile.specialties.length}`} label="Especialidades" />
+              </View>
+              <View style={styles.profileAvailability}>
+                <View style={[styles.profileAvailabilityDot, profileDraft.disponible && user.caregiverProfile.verificado && styles.profileAvailabilityDotOn]} />
+                <View style={styles.profileAvailabilityCopy}>
+                  <Text style={styles.profileAvailabilityTitle}>
+                    {profileDraft.disponible && user.caregiverProfile.verificado ? 'Disponible para recibir servicios' : 'No disponible'}
+                  </Text>
+                  <Text style={styles.profileAvailabilityHint}>
+                    {user.caregiverProfile.verificado ? 'Controla si las familias pueden encontrarte' : 'Completa tu verificación para activarte'}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: profileDraft.disponible && !!user.caregiverProfile.verificado }}
+                  onPress={() => {
+                    if (!user.caregiverProfile?.verificado) {
+                      Alert.alert(
+                        'Verificación requerida',
+                        'No puedes estar activo si tu cuenta no está verificada. Sube tu INE y selfie en esta misma pantalla.',
+                      );
+                      return;
+                    }
+                    const next = !profileDraft.disponible;
+                    setProfileDraft((d) => ({ ...d, disponible: next }));
+                    onUpdateUser({ ...user, caregiverProfile: { ...user.caregiverProfile!, disponible: next } });
+                    if (!user.caregiverProfile?.apiId) return;
+                    setProfileError('');
+                    void (async () => {
+                      try { await updateCuidadorDisponible(user.caregiverProfile!.apiId!, next, user.token); }
+                      catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar disponibilidad, se reintentará al guardar.'); }
+                    })();
+                  }}
+                  style={[styles.switchTrack, profileDraft.disponible && styles.switchTrackOn, !user.caregiverProfile.verificado && styles.switchTrackDisabled]}
+                >
+                  <View style={[styles.switchThumb, profileDraft.disponible && styles.switchThumbOn]} />
+                </Pressable>
+              </View>
+              {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
+            </View>
+          </View>
+
+          {!user.caregiverProfile.verificado && (
+            <View style={[styles.detailsCard, styles.profileSectionCard]}>
+            <View style={styles.profileSectionHeading}>
+              <View>
+                <Text style={styles.sectionTitle}>Verificación</Text>
+                <Text style={styles.profileSectionHint}>Identidad segura para las familias</Text>
+              </View>
+              <View style={styles.verificationStateBadge}>
+                <Text style={styles.verificationStateText}>Pendiente</Text>
+              </View>
             </View>
             <Text style={styles.profileDescription}>
-              {!user.caregiverProfile?.verificado
-                ? 'Bloqueado: verifica tu cuenta para poder activarte y aparecer en el mapa.'
-                : profileDraft.disponible
-                  ? 'Activo: visible para recibir servicios.'
-                  : 'Inactivo: no disponible manualmente.'}
+              Sube una foto clara de tu INE y un selfie para que un administrador revise tu cuenta. Mientras tanto no puedes estar activo.
             </Text>
-          </View>
-
-          <View style={styles.detailsCard}>
-            <Text style={styles.sectionTitle}>Verificación de cuenta</Text>
-            {user.caregiverProfile?.verificado ? (
-              <Text style={styles.verificationOkText}>Tu cuenta está verificada. Ya puedes activarte y aparecer en el mapa.</Text>
-            ) : (
-              <>
-                <Text style={styles.profileDescription}>
-                  Sube una foto clara de tu INE y un selfie para que un administrador revise tu cuenta. Mientras tanto no puedes estar activo.
-                </Text>
-                <View style={styles.verificationRow}>
-                  <Pressable onPress={() => askVerificationImage('ine')} style={styles.verificationPick}>
-                    {ineUri ? <Image source={{ uri: ineUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar INE</Text>}
-                  </Pressable>
-                  <Pressable onPress={() => askVerificationImage('selfie')} style={styles.verificationPick}>
-                    {selfieUri ? <Image source={{ uri: selfieUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar selfie</Text>}
-                  </Pressable>
-                </View>
-                {verificationSent && <Text style={styles.verificationReviewText}>Documentos enviados. Estamos en revisión.</Text>}
-                {!!verificationError && <Text style={styles.locationError}>{verificationError}</Text>}
-                <Pressable
-                  disabled={verificationSaving}
-                  onPress={() => { void submitVerification(); }}
-                  style={styles.saveLocationButton}
-                >
-                  <Text style={styles.saveLocationText}>
-                    {verificationSaving ? 'Enviando...' : verificationSent ? 'Volver a enviar documentos' : 'Enviar documentos'}
-                  </Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-
-          <View style={styles.detailsCard}>
-            <Text style={styles.sectionTitle}>Información personal</Text>
-            {profileEditing ? (
-              <>
-                <TextInput style={styles.locationInput} placeholder="Nombre" value={profileDraft.name} onChangeText={(v) => setProfileDraft((d) => ({ ...d, name: v }))} />
-                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Teléfono" value={profileDraft.phone} onChangeText={(v) => setProfileDraft((d) => ({ ...d, phone: v }))} />
-                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Título profesional" value={profileDraft.professionalTitle} onChangeText={(v) => setProfileDraft((d) => ({ ...d, professionalTitle: v }))} />
-                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Cédula" value={profileDraft.identificationNumber} onChangeText={(v) => setProfileDraft((d) => ({ ...d, identificationNumber: v }))} />
-                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="RFC" value={profileDraft.rfc} onChangeText={(v) => setProfileDraft((d) => ({ ...d, rfc: v }))} autoCapitalize="characters" />
-                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Descripción" value={profileDraft.description} onChangeText={(v) => setProfileDraft((d) => ({ ...d, description: v }))} multiline />
-                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Años experiencia" keyboardType="numeric" value={profileDraft.yearsExperience} onChangeText={(v) => setProfileDraft((d) => ({ ...d, yearsExperience: v.replace(/\D/g, '') }))} />
-                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Tarifa hora" keyboardType="numeric" value={profileDraft.hourlyRate} onChangeText={(v) => setProfileDraft((d) => ({ ...d, hourlyRate: v.replace(/[^\d.]/g, '') }))} />
-                <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Especialidades (coma)" value={profileDraft.specialties} onChangeText={(v) => setProfileDraft((d) => ({ ...d, specialties: v }))} />
-                {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
-                <Pressable disabled={profileSaving} onPress={() => void saveCaregiverProfile()} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>{profileSaving ? 'Guardando...' : 'Guardar cambios'}</Text></Pressable>
-                <Pressable onPress={() => setProfileEditing(false)} style={styles.signOutButton}><Text style={styles.signOutText}>Cancelar</Text></Pressable>
-              </>
-            ) : (
-              <>
-                <Text style={styles.detailText}>{user.name}</Text>
-                <Text style={styles.profileDescription}>{user.email} · {user.phone}</Text>
-                <Text style={styles.profileDescription}>{user.caregiverProfile.professionalTitle} · {user.caregiverProfile.yearsExperience} años · ${user.caregiverProfile.hourlyRate} MXN/h</Text>
-                <Text style={styles.profileDescription}>Cédula: {user.caregiverProfile.identificationNumber} · RFC: {user.caregiverProfile.rfc}</Text>
-                <Text style={styles.profileDescription}>{user.caregiverProfile.description}</Text>
-                <Text style={styles.profileDescription}>Especialidades: {user.caregiverProfile.specialties.join(', ')}</Text>
-                {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
-                <Pressable onPress={() => setProfileEditing(true)} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>Editar información</Text></Pressable>
-                <Pressable disabled={profileSaving} onPress={() => void removeCaregiverProfile()} style={styles.signOutButton}><Text style={styles.signOutText}>{profileSaving ? 'Eliminando...' : 'Eliminar perfil de cuidador'}</Text></Pressable>
-              </>
-            )}
-          </View>
-
-          <LocationEditor coordinates={user.caregiverProfile.serviceCoordinates} location={user.caregiverProfile.serviceLocation} onSave={onSaveLocation} />
-
-          <View style={styles.detailsCard}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.sectionTitle}>Disponibilidad</Text>
-              <Pressable onPress={() => setDispDraft({ ids: [], dias: [0], hora_inicio: '08:00', hora_fin: '14:00' })} style={styles.messageAction}><Text style={styles.messageActionText}>Agregar</Text></Pressable>
+            <View style={styles.verificationRow}>
+              <Pressable onPress={() => askVerificationImage('ine')} style={styles.verificationPick}>
+                {ineUri ? <Image source={{ uri: ineUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar INE</Text>}
+              </Pressable>
+              <Pressable onPress={() => askVerificationImage('selfie')} style={styles.verificationPick}>
+                {selfieUri ? <Image source={{ uri: selfieUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar selfie</Text>}
+              </Pressable>
             </View>
-            {dispLoading ? <ActivityIndicator color={colors.tealDark} /> : null}
-            {disponibilidades.map((d) => (
-              <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
-                <Text style={[styles.profileDescription, { flex: 1, marginTop: 0 }]}>{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][d.dia_semana] ?? d.dia_semana}: {d.hora_inicio} - {d.hora_fin}</Text>
-                <Pressable onPress={() => setDispDraft({ ids: [d.id], dias: [d.dia_semana], hora_inicio: d.hora_inicio, hora_fin: d.hora_fin })} style={styles.messageAction}><Text style={styles.messageActionText}>Editar</Text></Pressable>
-                <Pressable onPress={() => void removeDisponibilidad(d.id)} style={styles.messageAction}><Text style={styles.messageActionText}>Eliminar</Text></Pressable>
+            {verificationSent && <Text style={styles.verificationReviewText}>Documentos enviados. Estamos en revisión.</Text>}
+            {!!verificationError && <Text style={styles.locationError}>{verificationError}</Text>}
+            <Pressable
+              disabled={verificationSaving}
+              onPress={() => { void submitVerification(); }}
+              style={styles.saveLocationButton}
+            >
+              <Text style={styles.saveLocationText}>
+                {verificationSaving ? 'Enviando...' : verificationSent ? 'Volver a enviar documentos' : 'Enviar documentos'}
+              </Text>
+            </Pressable>
+            </View>
+          )}
+
+          <View style={[styles.detailsCard, styles.profileSectionCard]}>
+            <Text style={styles.sectionTitle}>Tu cuenta</Text>
+            <Pressable accessibilityRole="button" onPress={startEditingProfile} style={styles.profileMenuRow}>
+              <View style={styles.profileMenuIcon}><Text style={styles.profileMenuIconText}>◉</Text></View>
+              <View style={styles.profileMenuCopy}>
+                <Text style={styles.profileMenuTitle}>Información personal</Text>
+                <Text style={styles.profileMenuSubtitle}>{user.email} · {user.phone || 'Agrega tu teléfono'}</Text>
               </View>
-            ))}
-            {!dispLoading && !disponibilidades.length ? <Text style={styles.profileDescription}>Sin horarios registrados.</Text> : null}
+              <Text style={styles.profileMenuArrow}>›</Text>
+            </Pressable>
           </View>
 
-          <Modal visible={!!dispDraft} animationType="slide" transparent onRequestClose={() => setDispDraft(null)}>
+          <Modal visible={profileEditing} animationType="fade" transparent onRequestClose={() => setProfileConfirmation('discardProfile')}>
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
                 <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-                  <Text style={styles.pageTitle}>{dispDraft?.ids.length ? 'Editar disponibilidad' : 'Nueva disponibilidad'}</Text>
-                  <Text style={styles.sectionTitle}>Días de la semana</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                    {['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map((label, idx) => {
-                      const active = dispDraft?.dias.includes(idx);
-                      return (
-                        <Pressable key={label} onPress={() => setDispDraft((d) => d ? { ...d, dias: active ? d.dias.filter((x) => x !== idx) : [...d.dias, idx] } : d)} style={[styles.dayChip, active && styles.dayChipActive]}>
-                          <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{label}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  <TextInput style={[styles.locationInput, { marginTop: 12 }]} placeholder="Hora inicio (08:00)" value={dispDraft?.hora_inicio ?? ''} onChangeText={(v) => setDispDraft((d) => d ? { ...d, hora_inicio: v } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Hora fin (14:00)" value={dispDraft?.hora_fin ?? ''} onChangeText={(v) => setDispDraft((d) => d ? { ...d, hora_fin: v } : d)} />
+                  <Text style={styles.pageTitle}>Editar información</Text>
+                  <Text style={styles.subtitle}>Actualiza los datos que ven las familias en tu perfil.</Text>
+                  <TextInput style={styles.locationInput} placeholder="Nombre" value={profileDraft.name} onChangeText={(v) => setProfileDraft((d) => ({ ...d, name: v }))} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Teléfono" value={profileDraft.phone} onChangeText={(v) => setProfileDraft((d) => ({ ...d, phone: v }))} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Título profesional" value={profileDraft.professionalTitle} onChangeText={(v) => setProfileDraft((d) => ({ ...d, professionalTitle: v }))} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Cédula" value={profileDraft.identificationNumber} onChangeText={(v) => setProfileDraft((d) => ({ ...d, identificationNumber: v }))} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="RFC" value={profileDraft.rfc} onChangeText={(v) => setProfileDraft((d) => ({ ...d, rfc: v }))} autoCapitalize="characters" />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Descripción" value={profileDraft.description} onChangeText={(v) => setProfileDraft((d) => ({ ...d, description: v }))} multiline />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Años experiencia" keyboardType="numeric" value={profileDraft.yearsExperience} onChangeText={(v) => setProfileDraft((d) => ({ ...d, yearsExperience: v.replace(/\D/g, '') }))} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Tarifa hora" keyboardType="numeric" value={profileDraft.hourlyRate} onChangeText={(v) => setProfileDraft((d) => ({ ...d, hourlyRate: v.replace(/[^\d.]/g, '') }))} />
+                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Especialidades (coma)" value={profileDraft.specialties} onChangeText={(v) => setProfileDraft((d) => ({ ...d, specialties: v }))} />
                   {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
-                  <Pressable disabled={dispSaving} onPress={() => void saveDisponibilidad()} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>{dispSaving ? 'Guardando...' : 'Guardar'}</Text></Pressable>
-                  <Pressable onPress={() => setDispDraft(null)} style={styles.signOutButton}><Text style={styles.signOutText}>Cancelar</Text></Pressable>
+                  <Pressable disabled={profileSaving} onPress={() => void saveCaregiverProfile()} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>{profileSaving ? 'Guardando...' : 'Guardar cambios'}</Text></Pressable>
+                  <Pressable disabled={profileSaving} onPress={() => setProfileConfirmation('discardProfile')} style={styles.signOutButton}><Text style={styles.signOutText}>Cancelar</Text></Pressable>
                 </ScrollView>
               </View>
             </View>
           </Modal>
 
-          <Pressable disabled={profileSaving} onPress={() => void deleteAccount()} style={styles.signOutButton}><Text style={styles.signOutText}>{profileSaving ? 'Eliminando...' : 'Eliminar cuenta'}</Text></Pressable>
-          <Pressable onPress={onSignOut} style={styles.signOutButton}><Text style={styles.signOutText}>Cerrar sesión</Text></Pressable>
+          <LocationEditor coordinates={user.caregiverProfile.serviceCoordinates} location={user.caregiverProfile.serviceLocation} onSave={onSaveLocation} />
+
+          <View style={styles.accountActions}>
+            <Pressable disabled={profileSaving} onPress={() => setProfileConfirmation('removeProfile')} style={styles.accountActionRow}>
+              <Text style={styles.accountActionTextDanger}>{profileSaving ? 'Eliminando perfil...' : 'Eliminar perfil de cuidador'}</Text>
+              <Text style={styles.profileMenuArrow}>›</Text>
+            </Pressable>
+            <Pressable disabled={profileSaving} onPress={() => setProfileConfirmation('deleteAccount')} style={styles.accountActionRow}>
+              <Text style={styles.accountActionTextDanger}>{profileSaving ? 'Eliminando cuenta...' : 'Eliminar cuenta'}</Text>
+              <Text style={styles.profileMenuArrow}>›</Text>
+            </Pressable>
+            <Pressable onPress={onSignOut} style={styles.accountActionRow}>
+              <Text style={styles.accountActionText}>Cerrar sesión</Text>
+              <Text style={styles.profileMenuArrow}>›</Text>
+            </Pressable>
+          </View>
+          <ConfirmationModal
+            visible={!!profileConfirmation}
+            title={profileConfirmation === 'removeProfile'
+              ? '¿Eliminar perfil de cuidador?'
+              : profileConfirmation === 'deleteAccount'
+                ? '¿Eliminar tu cuenta?'
+                : '¿Descartar cambios?'}
+            message={profileConfirmation === 'removeProfile'
+              ? 'Se eliminará tu perfil de cuidador y ya no aparecerá en la plataforma.'
+              : profileConfirmation === 'deleteAccount'
+                ? 'Esta acción eliminará tu cuenta y no se puede deshacer.'
+                : 'Se cerrará el formulario y se perderán los cambios que no hayas guardado.'}
+            confirmLabel={profileConfirmation === 'removeProfile' || profileConfirmation === 'deleteAccount' ? 'Sí, eliminar' : 'Descartar'}
+            destructive={profileConfirmation === 'removeProfile' || profileConfirmation === 'deleteAccount'}
+            loading={profileSaving && (profileConfirmation === 'removeProfile' || profileConfirmation === 'deleteAccount')}
+            onCancel={() => setProfileConfirmation(null)}
+            onConfirm={() => { void confirmProfileAction(); }}
+          />
         </ScrollView>
       )}
     </View>
@@ -872,6 +905,15 @@ function Avatar({ initials, color, size }: { initials: string; color: string; si
   );
 }
 
+function ProfileStat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.profileStat}>
+      <Text style={styles.profileStatValue}>{value}</Text>
+      <Text style={styles.profileStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function initialsFor(name: string) {
   return name
     .split(' ')
@@ -884,8 +926,40 @@ function initialsFor(name: string) {
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   page: { paddingHorizontal: 19, paddingTop: 24, paddingBottom: 30 },
+  profilePage: { backgroundColor: '#F0F1F7', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 30 },
   pageTitle: { color: colors.ink, fontSize: 25, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  profileHero: { backgroundColor: '#ECEEF6', borderRadius: 25, marginHorizontal: -16, marginTop: -12, paddingHorizontal: 16, paddingTop: 13 },
+  profileTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  profilePageTitle: { color: '#20212B', fontSize: 25, fontWeight: '800' },
+  profileCheckBadge: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 22, height: 42, justifyContent: 'center', width: 42 },
+  profileCheckBadgeVerified: { backgroundColor: '#E1F3EA' },
+  profileCheckText: { color: '#9B6D25', fontSize: 18, fontWeight: '800' },
+  profileCheckTextVerified: { color: colors.green },
+  profilePortrait: { alignItems: 'center', marginTop: 8, zIndex: 1 },
+  profilePortraitRing: { alignItems: 'center', backgroundColor: colors.white, borderColor: '#CDE7E8', borderRadius: 54, borderWidth: 4, height: 108, justifyContent: 'center', overflow: 'hidden', width: 108 },
+  profilePortraitImage: { height: 100, width: 100 },
+  profilePortraitInitial: { color: colors.tealDark, fontSize: 40, fontWeight: '800' },
+  profileSummaryCard: { backgroundColor: colors.white, borderColor: '#E8E8EF', borderRadius: 24, borderWidth: 1, marginBottom: 17, marginTop: -38, paddingHorizontal: 17, paddingTop: 51, paddingBottom: 16, shadowColor: '#24283D', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.07, shadowRadius: 16, elevation: 3 },
+  profileNameLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  profileNameCopy: { flex: 1, paddingRight: 8 },
+  profileDisplayName: { color: '#252631', fontSize: 17, fontWeight: '800' },
+  profileDisplaySubtitle: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  profileRoleBadge: { backgroundColor: '#292A34', borderRadius: 15, paddingHorizontal: 11, paddingVertical: 7 },
+  profileRoleBadgeVerified: { backgroundColor: '#E1F3EA' },
+  profileRoleBadgeText: { color: colors.white, fontSize: 9, fontWeight: '800' },
+  profileRoleBadgeTextVerified: { color: colors.green },
+  profileStats: { alignItems: 'center', backgroundColor: '#F7F7FA', borderRadius: 17, flexDirection: 'row', justifyContent: 'space-around', marginTop: 16, paddingVertical: 12 },
+  profileStat: { alignItems: 'center', flex: 1 },
+  profileStatValue: { color: '#292A34', fontSize: 17, fontWeight: '800' },
+  profileStatLabel: { color: colors.muted, fontSize: 9, marginTop: 4, textAlign: 'center' },
+  profileStatDivider: { backgroundColor: '#E3E4EA', height: 30, width: 1 },
+  profileAvailability: { alignItems: 'center', backgroundColor: '#F1F5F3', borderRadius: 15, flexDirection: 'row', marginTop: 13, paddingHorizontal: 12, paddingVertical: 10 },
+  profileAvailabilityDot: { backgroundColor: colors.gold, borderRadius: 5, height: 10, width: 10 },
+  profileAvailabilityDotOn: { backgroundColor: colors.green },
+  profileAvailabilityCopy: { flex: 1, marginLeft: 9 },
+  profileAvailabilityTitle: { color: colors.ink, fontSize: 10, fontWeight: '800' },
+  profileAvailabilityHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
   summaryCard: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 16, flexDirection: 'row', marginTop: 19, padding: 14 },
   summaryIcon: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
   summaryIconText: { color: colors.tealDark, fontSize: 23 },
@@ -949,13 +1023,7 @@ const styles = StyleSheet.create({
   clientLocation: { color: colors.tealDark, fontSize: 9, marginTop: 5 },
   messageAction: { backgroundColor: colors.tealPale, borderRadius: 15, marginLeft: 7, paddingHorizontal: 10, paddingVertical: 8 },
   messageActionText: { color: colors.tealDark, fontSize: 9, fontWeight: '800' },
-  profileCard: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 18, marginTop: 19, padding: 20 },
-  profilePhoto: { backgroundColor: colors.white, borderRadius: 38, height: 76, width: 76 },
-  profileName: { color: colors.ink, fontSize: 18, fontWeight: '800', marginTop: 10 },
-  profileTitle: { color: colors.muted, fontSize: 11, marginTop: 4 },
-  profileRoleBadge: { backgroundColor: colors.white, borderRadius: 12, marginTop: 9, paddingHorizontal: 10, paddingVertical: 5 },
-  profileRoleText: { color: colors.tealDark, fontSize: 9, fontWeight: '700' },
-  locationCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginTop: 13, padding: 14 },
+  locationCard: { backgroundColor: colors.white, borderColor: '#E8E8EF', borderRadius: 21, borderWidth: 1, marginTop: 13, padding: 17 },
   locationHeading: { alignItems: 'center', flexDirection: 'row', marginBottom: 12 },
   locationIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 18, height: 36, justifyContent: 'center', marginRight: 9, width: 36 },
   pinOuter: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 8, height: 16, justifyContent: 'center', width: 16 },
@@ -971,30 +1039,41 @@ const styles = StyleSheet.create({
   saveLocationButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 10, marginTop: 9, paddingVertical: 10 },
   saveLocationText: { color: colors.white, fontSize: 10, fontWeight: '800' },
   detailsCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginTop: 12, padding: 14 },
+  profileSectionCard: { borderColor: '#E8E8EF', borderRadius: 21, marginTop: 13, padding: 17, shadowColor: '#24283D', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.035, shadowRadius: 10, elevation: 1 },
+  profileSectionHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  profileSectionHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  verificationStateBadge: { backgroundColor: '#FFF5DF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
+  verificationStateText: { color: '#98702D', fontSize: 9, fontWeight: '800' },
+  profileMenuRow: { alignItems: 'center', flexDirection: 'row', marginTop: 12, paddingVertical: 5 },
+  profileMenuIcon: { alignItems: 'center', backgroundColor: '#F1F1F6', borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
+  profileMenuIconText: { color: colors.tealDark, fontSize: 18, fontWeight: '700' },
+  profileMenuCopy: { flex: 1, marginLeft: 11 },
+  profileMenuTitle: { color: colors.ink, fontSize: 11, fontWeight: '800' },
+  profileMenuSubtitle: { color: colors.muted, fontSize: 9, marginTop: 4 },
+  profileMenuArrow: { color: '#7C818D', fontSize: 24, marginLeft: 8 },
+  accountActions: { backgroundColor: colors.white, borderColor: '#E8E8EF', borderRadius: 20, borderWidth: 1, marginTop: 13, paddingHorizontal: 15 },
+  accountActionRow: { alignItems: 'center', borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 48 },
+  accountActionText: { color: colors.ink, fontSize: 10, fontWeight: '700' },
+  accountActionTextDanger: { color: '#B64B47', fontSize: 10, fontWeight: '700' },
   detailText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', marginTop: 7 },
   profileDescription: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 7 },
   specialties: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
   specialtyChip: { backgroundColor: colors.tealPale, borderRadius: 11, color: colors.tealDark, fontSize: 9, marginBottom: 5, marginRight: 5, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 6 },
   signOutButton: { alignItems: 'center', borderColor: colors.line, borderRadius: 12, borderWidth: 1, marginTop: 14, paddingVertical: 12 },
   signOutText: { color: colors.tealDark, fontSize: 11, fontWeight: '700' },
-  modalBackdrop: { backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: colors.canvas, borderTopLeftRadius: 18, borderTopRightRadius: 18, maxHeight: '92%' },
-  modalContent: { padding: 16, paddingBottom: 28 },
+  modalBackdrop: { alignItems: 'center', backgroundColor: 'rgba(17,39,41,0.5)', flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 24 },
+  modalCard: { backgroundColor: colors.canvas, borderRadius: 24, maxHeight: '90%', maxWidth: 520, width: '100%' },
+  modalContent: { padding: 20, paddingBottom: 24 },
   switchTrack: { width: 48, height: 28, borderRadius: 14, backgroundColor: '#C7D4D6', padding: 2 },
   switchTrackOn: { backgroundColor: colors.tealDark },
   switchTrackDisabled: { opacity: 0.45 },
   switchThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.white },
   switchThumbOn: { marginLeft: 20 },
-  dayChip: { borderColor: colors.line, borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.white },
-  dayChipActive: { backgroundColor: colors.tealDark, borderColor: colors.tealDark },
-  dayChipText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
-  dayChipTextActive: { color: colors.white },
   verificationBanner: { backgroundColor: '#FFF6E2', borderColor: colors.gold, borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 13 },
   verificationBannerTitle: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   verificationBannerText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 5 },
   verificationBannerAction: { color: colors.tealDark, fontSize: 10, fontWeight: '800', marginTop: 8 },
   verificationReviewText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', marginTop: 9 },
-  verificationOkText: { color: colors.green, fontSize: 11, fontWeight: '700', marginTop: 8 },
   verificationRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   verificationPick: { alignItems: 'center', backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 12, borderWidth: 1, flex: 1, height: 96, justifyContent: 'center', overflow: 'hidden' },
   verificationPickText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', textAlign: 'center' },

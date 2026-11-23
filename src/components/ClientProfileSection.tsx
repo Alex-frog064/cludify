@@ -14,6 +14,7 @@ import {
   updateGeocerca,
   updateMedicina,
 } from '../api/auth';
+import { ConfirmationModal } from './ConfirmationModal';
 import { OpenStreetMapView } from './OpenStreetMapView';
 import { getCurrentServiceLocation, searchAddressSuggestions, AddressSuggestion } from '../utils/currentServiceLocation';
 import { colors } from '../theme';
@@ -39,20 +40,31 @@ const createRecipient = (): CareRecipient => ({
   geofence: { nombre: 'Casa', latitud: 0, longitud: 0, radio_metros: 100, activo: true },
 });
 
+type PendingConfirmation =
+  | { type: 'deleteProfile'; profile: CareRecipient }
+  | { type: 'removeMedication'; medicationId: string }
+  | { type: 'discardRecipient' }
+  | { type: 'discardMedication' }
+  | { type: 'discardLocation' };
+
 export function ClientProfileSection({ profiles, familiarId, token, onSave, onDelete }: Props) {
   const [draft, setDraft] = useState<CareRecipient | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoLocating, setGeoLocating] = useState(false);
   const [geoSuggestions, setGeoSuggestions] = useState<AddressSuggestion[]>([]);
   const [geoModalOpen, setGeoModalOpen] = useState(false);
+  const [geofenceBeforeEdit, setGeofenceBeforeEdit] = useState<Geofence | undefined>();
   const [medModal, setMedModal] = useState<Medication | null>(null);
   const loadedKeyRef = useRef<string>('');
   const profilesRef = useRef(profiles);
-  profilesRef.current = profiles;
+
+  useEffect(() => {
+    profilesRef.current = profiles;
+  }, [profiles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,7 +181,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
         estado: draft.geofence?.estado,
       });
       if (!suggestions.length) {
-        setError('No se encontraron coincidencias. Muestra sugerencias amplias al escribir colonia/ciudad; tambiÃ©n puedes usar tu ubicaciÃ³n actual.');
+        setError('No se encontraron coincidencias. Amplía colonia o ciudad, o usa tu ubicación actual.');
         return;
       }
       setGeoSuggestions(suggestions);
@@ -184,7 +196,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
         estado: first.estado ?? draft.geofence?.estado,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo buscar la direcciÃ³n.');
+      setError(e instanceof Error ? e.message : 'No se pudo buscar la dirección.');
     } finally {
       setGeoLoading(false);
     }
@@ -196,7 +208,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
     try {
       const result = await getCurrentServiceLocation();
       if (!result.granted) {
-        setError('Permite el acceso a tu ubicaciÃ³n para usar la ubicaciÃ³n actual.');
+        setError('Permite el acceso a tu ubicación para usar la ubicación actual.');
         return;
       }
       updateGeofence({
@@ -207,24 +219,10 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
       });
       setGeoSuggestions([]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo obtener la ubicaciÃ³n actual.');
+      setError(e instanceof Error ? e.message : 'No se pudo obtener la ubicación actual.');
     } finally {
       setGeoLocating(false);
     }
-  };
-
-  const updateMedication = (id: string, updates: Partial<Medication>) => {
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            medications: current.medications.map((medication) =>
-              medication.id === id ? { ...medication, ...updates } : medication,
-            ),
-          }
-        : current,
-    );
-    setError('');
   };
 
   const updateBirthDate = (value: string) => {
@@ -241,11 +239,11 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
   const saveDraft = async () => {
     if (!draft) return;
     if (!draft.name.trim()) {
-      setError('Escribe el nombre de la persona que recibirÃ¡ cuidados.');
+      setError('Escribe el nombre de la persona que recibirá cuidados.');
       return;
     }
     if (!isValidBirthDate(draft.birthDate)) {
-      setError('Escribe una fecha de nacimiento vÃ¡lida en formato DD/MM/AAAA.');
+      setError('Escribe una fecha de nacimiento válida en formato DD/MM/AAAA.');
       return;
     }
     const medications = draft.medications
@@ -345,12 +343,52 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
     }
   };
 
+  const confirmPendingAction = async () => {
+    if (!pendingConfirmation) return;
+    if (pendingConfirmation.type === 'deleteProfile') {
+      const { profile } = pendingConfirmation;
+      setError('');
+      setLoading(true);
+      try {
+        if (profile.apiId) await deleteAbuelo(profile.apiId, token);
+        await onDelete(profile.id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo eliminar el perfil.');
+      } finally {
+        setLoading(false);
+        setPendingConfirmation(null);
+      }
+      return;
+    }
+
+    if (pendingConfirmation.type === 'removeMedication') {
+      if (draft) {
+        updateDraft({ medications: draft.medications.filter((item) => item.id !== pendingConfirmation.medicationId) });
+      }
+    } else if (pendingConfirmation.type === 'discardRecipient') {
+      setDraft(null);
+      setError('');
+    } else if (pendingConfirmation.type === 'discardMedication') {
+      setMedModal(null);
+      setError('');
+    } else {
+      setDraft((current) => current
+        ? { ...current, geofence: geofenceBeforeEdit ? { ...geofenceBeforeEdit } : undefined }
+        : current);
+      setGeoModalOpen(false);
+      setGeoSuggestions([]);
+      setGeofenceBeforeEdit(undefined);
+      setError('');
+    }
+    setPendingConfirmation(null);
+  };
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionHeading}>
-          <Text style={styles.sectionTitle}>Personas a cuidar</Text>
-          <Text style={styles.sectionHint}>Agrega sus datos de salud y medicamentos.</Text>
+          <Text style={styles.sectionTitle}>Mis personas mayores</Text>
+          <Text style={styles.sectionHint}>Datos de salud, ubicación y medicamentos.</Text>
         </View>
         {!draft && (
           <Pressable
@@ -361,17 +399,22 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
             }}
             style={styles.addButton}
           >
-            <Text style={styles.addButtonText}>+ Agregar</Text>
+            <Text style={styles.addButtonText}>＋ Agregar</Text>
           </Pressable>
         )}
       </View>
+
+      {!!error && !draft && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
 
       {loadingProfiles ? (
         <View style={styles.emptyCard}><ActivityIndicator color={colors.tealDark} /></View>
       ) : profiles.length === 0 && !draft ? (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>AÃºn no agregas a nadie</Text>
-          <Text style={styles.emptyText}>Registra a la persona para quien buscas cuidado.</Text>
+          <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>＋</Text></View>
+          <View style={styles.emptyCopy}>
+            <Text style={styles.emptyTitle}>Aún no agregas a nadie</Text>
+            <Text style={styles.emptyText}>Registra a tu familiar para personalizar su cuidado.</Text>
+          </View>
         </View>
       ) : (
         profiles.map((profile) => (
@@ -379,7 +422,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
             <View style={styles.profileHeader}>
               <View style={styles.profileIdentity}>
                 <Text style={styles.profileName}>{profile.name}</Text>
-                <Text style={styles.profileBirthDate}>Nacimiento Â· {profile.birthDate}</Text>
+                <Text style={styles.profileBirthDate}>Nacimiento · {profile.birthDate}</Text>
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -400,61 +443,37 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
             {!!profile.notes && <ProfileDetail label="Notas" value={profile.notes} />}
             {profile.geofence?.latitud && profile.geofence?.longitud ? (
               <ProfileDetail
-                label="UbicaciÃ³n"
+                label="Ubicación"
                 value={`${profile.geofence.nombre}: ${profile.geofence.latitud.toFixed(5)}, ${profile.geofence.longitud.toFixed(5)}`}
               />
             ) : null}
             <Text style={styles.medicationHeading}>
-              Medicamentos{profile.medications.length ? ` â€¢ ${profile.medications.length}` : ''}
+              Medicamentos{profile.medications.length ? ` • ${profile.medications.length}` : ''}
             </Text>
             {profile.medications.length ? (
               profile.medications.map((medication) => (
                 <View key={medication.id} style={styles.medicationSummary}>
                   <Text style={styles.medicationName}>{medication.name}</Text>
                   <Text style={styles.medicationDescription}>
-                    {medication.dosage} Â· {medication.schedule}
+                    {medication.dosage} · {medication.schedule}
                   </Text>
                 </View>
               ))
             ) : (
               <Text style={styles.noMedication}>Sin medicamentos registrados.</Text>
             )}
-            {deleteConfirmation === profile.id ? (
-              <View style={styles.deleteConfirmation}>
-                <Text style={styles.confirmText}>Â¿Eliminar este perfil?</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={async () => {
-                    setError('');
-                    setLoading(true);
-                    try {
-                      if (profile.apiId) await deleteAbuelo(profile.apiId, token);
-                      await onDelete(profile.id);
-                      setDeleteConfirmation(null);
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : 'No se pudo eliminar el perfil.');
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  style={styles.deleteButton}
-                >
-                  {loading ? <ActivityIndicator color="#B64B47" /> : <Text style={styles.deleteButtonText}>Eliminar</Text>}
-                </Pressable>
-                <Pressable onPress={() => setDeleteConfirmation(null)} style={styles.textButton}>
-                  <Text style={styles.textButtonLabel}>Cancelar</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable onPress={() => setDeleteConfirmation(profile.id)} style={styles.removeLink}>
-                <Text style={styles.removeLinkText}>Eliminar perfil</Text>
-              </Pressable>
-            )}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setPendingConfirmation({ type: 'deleteProfile', profile })}
+              style={styles.removeLink}
+            >
+              <Text style={styles.removeLinkText}>Eliminar perfil</Text>
+            </Pressable>
           </View>
         ))
       )}
 
-      <Modal visible={!!draft} animationType="slide" transparent onRequestClose={() => { setDraft(null); setError(''); }}>
+      <Modal visible={!!draft} animationType="fade" transparent onRequestClose={() => setPendingConfirmation({ type: 'discardRecipient' })}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
@@ -484,7 +503,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
             label="Notas importantes"
             value={draft.notes}
             onChangeText={(notes) => updateDraft({ notes })}
-            placeholder="Alergias, preferencias u otra informaciÃ³n"
+            placeholder="Alergias, preferencias u otra información"
             multiline
           />
 
@@ -493,7 +512,10 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
               <Text style={styles.formLabel}>Ubicación</Text>
               <Text style={styles.sectionHint}>{draft.geofence?.latitud && draft.geofence?.longitud ? (draft.geofence.calle || draft.geofence.nombre || 'Ubicación guardada') : 'Sin ubicación'}</Text>
             </View>
-            <Pressable accessibilityRole="button" onPress={() => setGeoModalOpen(true)} style={styles.addMedicationButton}>
+            <Pressable accessibilityRole="button" onPress={() => {
+              setGeofenceBeforeEdit(draft.geofence ? { ...draft.geofence } : undefined);
+              setGeoModalOpen(true);
+            }} style={styles.addMedicationButton}>
               <Text style={styles.addMedicationText}>{draft.geofence?.latitud ? 'Editar' : 'Agregar'}</Text>
             </Pressable>
           </View>
@@ -514,7 +536,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
                 <Text style={styles.medicationDescription}>{medication.dosage} • {medication.schedule}</Text>
               </View>
               <Pressable onPress={() => setMedModal({ ...medication })} style={styles.textButton}><Text style={styles.textButtonLabel}>Editar</Text></Pressable>
-              <Pressable onPress={() => updateDraft({ medications: draft.medications.filter((m) => m.id !== medication.id) })} style={styles.textButton}><Text style={styles.removeLinkText}>Quitar</Text></Pressable>
+              <Pressable onPress={() => setPendingConfirmation({ type: 'removeMedication', medicationId: medication.id })} style={styles.textButton}><Text style={styles.removeLinkText}>Quitar</Text></Pressable>
             </View>
           ))}
 
@@ -522,7 +544,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
           <Pressable accessibilityRole="button" disabled={loading} onPress={saveDraft} style={[styles.saveButton, loading && styles.saveButtonDisabled]}>
             {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.saveButtonText}>Guardar datos</Text>}
           </Pressable>
-          <Pressable accessibilityRole="button" disabled={loading} onPress={() => { setDraft(null); setError(''); }} style={styles.cancelButton}>
+          <Pressable accessibilityRole="button" disabled={loading} onPress={() => setPendingConfirmation({ type: 'discardRecipient' })} style={styles.cancelButton}>
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </Pressable>
               </>)}
@@ -531,7 +553,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
         </View>
       </Modal>
 
-      <Modal visible={geoModalOpen && !!draft} animationType="slide" transparent onRequestClose={() => setGeoModalOpen(false)}>
+      <Modal visible={geoModalOpen && !!draft} animationType="fade" transparent onRequestClose={() => setPendingConfirmation({ type: 'discardLocation' })}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
@@ -579,13 +601,16 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
                 </View>
               ) : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
-              <Pressable accessibilityRole="button" onPress={() => setGeoModalOpen(false)} style={styles.saveButton}><Text style={styles.saveButtonText}>Listo</Text></Pressable>
+              <Pressable accessibilityRole="button" onPress={() => {
+                setGeoModalOpen(false);
+                setGeofenceBeforeEdit(undefined);
+              }} style={styles.saveButton}><Text style={styles.saveButtonText}>Listo</Text></Pressable>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      <Modal visible={!!medModal && !!draft} animationType="slide" transparent onRequestClose={() => setMedModal(null)}>
+      <Modal visible={!!medModal && !!draft} animationType="fade" transparent onRequestClose={() => setPendingConfirmation({ type: 'discardMedication' })}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
@@ -602,11 +627,34 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
                 setError('');
                 setMedModal(null);
               }} style={styles.saveButton}><Text style={styles.saveButtonText}>Guardar medicamento</Text></Pressable>
-              <Pressable accessibilityRole="button" onPress={() => { setError(''); setMedModal(null); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancelar</Text></Pressable>
+              <Pressable accessibilityRole="button" onPress={() => setPendingConfirmation({ type: 'discardMedication' })} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancelar</Text></Pressable>
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      <ConfirmationModal
+        visible={!!pendingConfirmation}
+        title={pendingConfirmation?.type === 'deleteProfile'
+          ? '¿Eliminar perfil?'
+          : pendingConfirmation?.type === 'removeMedication'
+            ? '¿Quitar medicamento?'
+            : '¿Descartar cambios?'}
+        message={pendingConfirmation?.type === 'deleteProfile'
+          ? `Se eliminará el perfil de ${pendingConfirmation.profile.name} y sus datos asociados.`
+          : pendingConfirmation?.type === 'removeMedication'
+            ? 'Este medicamento se quitará de la lista. Recuerda guardar los cambios del perfil.'
+            : pendingConfirmation?.type === 'discardRecipient'
+              ? 'Se cerrará el formulario y se perderán los cambios que no hayas guardado.'
+              : pendingConfirmation?.type === 'discardMedication'
+                ? 'Se cerrará el formulario del medicamento y se perderán los cambios sin guardar.'
+                : 'Se cerrará la edición de ubicación. Los cambios del perfil se conservarán solo al guardar.'}
+        confirmLabel={pendingConfirmation?.type === 'deleteProfile' || pendingConfirmation?.type === 'removeMedication' ? 'Sí, eliminar' : 'Descartar'}
+        destructive={pendingConfirmation?.type === 'deleteProfile' || pendingConfirmation?.type === 'removeMedication'}
+        loading={loading && pendingConfirmation?.type === 'deleteProfile'}
+        onCancel={() => setPendingConfirmation(null)}
+        onConfirm={() => { void confirmPendingAction(); }}
+      />
 
       <Text style={styles.disclaimer}>Estos datos se guardan en tu cuenta cuando hay conexión.</Text>
     </View>
@@ -675,17 +723,20 @@ function ProfileDetail({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  section: { alignSelf: 'stretch', marginTop: 22 },
-  sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  section: { alignSelf: 'stretch', marginTop: 24 },
+  sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
   sectionHeading: { flex: 1, paddingRight: 8 },
   sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: '800', textAlign: 'left' },
   sectionHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3, textAlign: 'left' },
-  addButton: { backgroundColor: colors.tealPale, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9 },
-  addButtonText: { color: colors.tealDark, fontSize: 11, fontWeight: '800' },
-  emptyCard: { alignItems: 'flex-start', backgroundColor: colors.canvas, borderRadius: 12, padding: 13 },
+  addButton: { backgroundColor: colors.ink, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 10 },
+  addButtonText: { color: colors.white, fontSize: 11, fontWeight: '800' },
+  emptyCard: { alignItems: 'center', backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 16, borderWidth: 1, flexDirection: 'row', padding: 16 },
+  emptyIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
+  emptyIconText: { color: colors.tealDark, fontSize: 20, fontWeight: '800' },
+  emptyCopy: { flex: 1, marginLeft: 12 },
   emptyTitle: { color: colors.ink, fontSize: 11, fontWeight: '800' },
   emptyText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 4, textAlign: 'left' },
-  profileCard: { alignItems: 'stretch', alignSelf: 'stretch', backgroundColor: colors.canvas, borderRadius: 13, marginBottom: 10, padding: 13 },
+  profileCard: { alignItems: 'stretch', alignSelf: 'stretch', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginBottom: 10, padding: 15, shadowColor: '#18383B', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8 },
   profileHeader: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   profileIdentity: { flex: 1, paddingRight: 8 },
   profileName: { color: colors.ink, fontSize: 13, fontWeight: '800', textAlign: 'left' },
@@ -702,13 +753,9 @@ const styles = StyleSheet.create({
   noMedication: { color: colors.muted, fontSize: 9, marginTop: 5, textAlign: 'left' },
   removeLink: { alignSelf: 'flex-start', marginTop: 12, paddingVertical: 4 },
   removeLinkText: { color: '#B64B47', fontSize: 10, fontWeight: '700' },
-  deleteConfirmation: { alignItems: 'center', borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 10 },
-  confirmText: { color: colors.ink, flex: 1, fontSize: 10, fontWeight: '700', textAlign: 'left' },
-  deleteButton: { backgroundColor: '#FCECEB', borderRadius: 8, marginRight: 4, paddingHorizontal: 8, paddingVertical: 6 },
-  deleteButtonText: { color: '#B64B47', fontSize: 10, fontWeight: '800' },
-  modalBackdrop: { backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: colors.canvas, borderTopLeftRadius: 18, borderTopRightRadius: 18, maxHeight: '92%' },
-  modalContent: { padding: 16, paddingBottom: 28 },
+  modalBackdrop: { alignItems: 'center', backgroundColor: 'rgba(17,39,41,0.5)', flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 24 },
+  modalCard: { backgroundColor: colors.canvas, borderRadius: 24, maxHeight: '90%', maxWidth: 520, width: '100%' },
+  modalContent: { padding: 20, paddingBottom: 24 },
   formCard: { alignItems: 'stretch', alignSelf: 'stretch', backgroundColor: colors.canvas, borderRadius: 13, marginTop: 2, padding: 13 },
   formTitle: { color: colors.ink, fontSize: 13, fontWeight: '800', marginBottom: 13, textAlign: 'left' },
   inputGroup: { marginBottom: 11 },
