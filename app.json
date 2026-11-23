@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Fronted",
-    "slug": "Fronted",
+    "name": "Qualify",
+    "slug": "qualify",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,6 +10,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.qualify.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +21,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permite que Qualify seleccione tu foto de perfil."
+        }
+      ]
+    ]
   }
 }

@@ -1,0 +1,58 @@
+import { Caregiver } from '../types';
+
+export const caregivers: Caregiver[] = [
+  {
+    id: 'maria-gonzalez',
+    name: 'María González',
+    title: 'Cuidadora de personas mayores',
+    location: 'Del Valle, CDMX',
+    distance: '800 m',
+    rating: '4.9',
+    reviews: 32,
+    yearsExperience: 6,
+    families: 48,
+    hourlyRate: 180,
+    availability: 'Disponible hoy · desde las 14:00',
+    image: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=240&h=240&fit=crop&crop=faces',
+    verified: true,
+    about:
+      'Acompaño a cada persona con paciencia y cariño. Me gusta escuchar sus historias y ayudarle a mantener su autonomía, con tranquilidad para toda la familia.',
+    specialties: ['Compañía', 'Movilidad', 'Alzheimer', 'Apoyo en higiene'],
+  },
+  {
+    id: 'carlos-ramirez',
+    name: 'Carlos Ramírez',
+    title: 'Acompañante y cuidador',
+    location: 'Narvarte, CDMX',
+    distance: '1.2 km',
+    rating: '4.8',
+    reviews: 24,
+    yearsExperience: 4,
+    families: 29,
+    hourlyRate: 160,
+    availability: 'Disponible ahora',
+    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=240&h=240&fit=crop&crop=faces',
+    verified: true,
+    about:
+      'Brindo acompañamiento respetuoso y apoyo en las actividades del día a día. Trabajo de la mano con la familia para ofrecer un cuidado confiable.',
+    specialties: ['Compañía', 'Movilidad', 'Paseos', 'Preparación de alimentos'],
+  },
+  {
+    id: 'ana-martinez',
+    name: 'Ana Martínez',
+    title: 'Cuidadora certificada',
+    location: 'Nápoles, CDMX',
+    distance: '2 km',
+    rating: '5.0',
+    reviews: 18,
+    yearsExperience: 8,
+    families: 36,
+    hourlyRate: 200,
+    availability: 'Disponible mañana',
+    image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=240&h=240&fit=crop&crop=faces',
+    verified: true,
+    about:
+      'Tengo experiencia en cuidado integral de adultos mayores y procuro que cada día sea seguro, activo y agradable.',
+    specialties: ['Compañía', 'Alzheimer', 'Medicamentos', 'Movilidad'],
+  },
+];
