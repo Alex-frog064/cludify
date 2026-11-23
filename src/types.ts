@@ -10,6 +10,7 @@ export type Caregiver = {
   families: number;
   hourlyRate: number;
   availability: string;
+  availabilityTone?: 'green' | 'amber';
   image: string;
   verified: boolean;
   about: string;
@@ -104,6 +105,13 @@ export type Servicio = {
   comision: number;
   estado: ServicioEstado;
   estado_pago: ServicioEstadoPago;
+  abuelo_nombre?: string;
+  cuidador_nombre?: string;
+  aceptado_por_familiar?: boolean | null;
+  aceptado_por_cuidador?: boolean | null;
+  aceptado_familiar_en?: string | null;
+  aceptado_cuidador_en?: string | null;
+  creado_en?: string | null;
 };
 
 export type Disponibilidad = {
@@ -124,4 +132,57 @@ export type UserAccount = {
   profilePhotoUri?: string;
   caregiverProfile?: CaregiverRegistration;
   careRecipients?: CareRecipient[];
+};
+
+export type ConsultaCuidador = {
+  consulta_id: number;
+  familiar_id?: number;
+  cuidador_id: number;
+  creado_en?: string;
+  actualizado_en?: string;
+  no_leidos?: number | null;
+  familiar?: { id: number; nombre: string; rol?: string };
+  cuidador?: {
+    cuidador_id: number;
+    nombre: string;
+    titulo?: string | null;
+    descripcion?: string | null;
+    especialidades?: string | null;
+    tarifa_hora?: number | null;
+    anios_experiencia?: number | null;
+    rol?: string;
+  };
+};
+
+export type MensajeConsulta = {
+  id: number;
+  consulta_id: number;
+  emisor_id: number;
+  contenido: string;
+  creado_en: string;
+  leido_en?: string | null;
+  emisor?: { id: number; nombre: string; rol?: string };
+};
+
+export type Abuelo = {
+  id: number;
+  familiar_id: number;
+  nombre: string;
+  nacimiento?: string | null;
+  condiciones?: string | null;
+  notas?: string | null;
+};
+
+export type Ubicacion = {
+  id: number;
+  abuelo_id?: number | null;
+  cuidador_id?: number | null;
+  latitud: number;
+  longitud: number;
+  velocidad?: number | null;
+  direccion_grados?: number | null;
+  precision_metros?: number | null;
+  bateria?: number | null;
+  fecha: string;
+  direccion_formateada?: string | null;
 };

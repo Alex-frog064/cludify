@@ -6,9 +6,11 @@ type Props = {
   caregiver: Caregiver;
   onBack: () => void;
   onRequestCare: () => void;
+  onMessage: () => void | Promise<void>;
+  messageLoading?: boolean;
 };
 
-export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare }: Props) {
+export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare, onMessage, messageLoading }: Props) {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -72,12 +74,15 @@ export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare }: Pro
       </ScrollView>
 
       <View style={styles.bottom}>
-        <View>
+        <View style={styles.priceBlock}>
           <Text style={styles.price}>${caregiver.hourlyRate} <Text style={styles.priceUnit}>MXN / hora</Text></Text>
           <Text style={styles.bodySmall}>Sin cobro hasta confirmar</Text>
         </View>
-        <Pressable onPress={onRequestCare} style={styles.requestButton}>
-          <Text style={styles.requestText}>Solicitar cuidado</Text>
+        <Pressable onPress={onRequestCare} style={styles.outlineButton}>
+          <Text style={styles.outlineButtonText}>Solicitar cuidado</Text>
+        </Pressable>
+        <Pressable disabled={messageLoading} onPress={onMessage} style={styles.requestButton}>
+          <Text style={styles.requestText}>{messageLoading ? 'Abriendo...' : 'Enviar mensaje'}</Text>
         </Pressable>
       </View>
     </View>
@@ -136,9 +141,12 @@ const styles = StyleSheet.create({
   reviewText: { color: colors.ink, fontSize: 11, fontStyle: 'italic', lineHeight: 17 },
   reviewBy: { color: colors.muted, fontSize: 9, marginTop: 8 },
   stars: { color: colors.gold, fontSize: 12, letterSpacing: 1, marginTop: 5 },
-  bottom: { alignItems: 'center', backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 17, paddingVertical: 12 },
-  price: { color: colors.ink, fontSize: 17, fontWeight: '800' },
-  priceUnit: { color: colors.muted, fontSize: 10, fontWeight: '400' },
-  requestButton: { backgroundColor: colors.teal, borderRadius: 22, paddingHorizontal: 19, paddingVertical: 13 },
-  requestText: { color: colors.white, fontSize: 11, fontWeight: '800' },
+  bottom: { alignItems: 'center', backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 12 },
+  priceBlock: { flexShrink: 1 },
+  price: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  priceUnit: { color: colors.muted, fontSize: 9, fontWeight: '400' },
+  outlineButton: { borderColor: colors.tealDark, borderRadius: 20, borderWidth: 1, marginHorizontal: 8, paddingHorizontal: 12, paddingVertical: 12 },
+  outlineButtonText: { color: colors.tealDark, fontSize: 10, fontWeight: '800' },
+  requestButton: { backgroundColor: colors.teal, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 13 },
+  requestText: { color: colors.white, fontSize: 10, fontWeight: '800' },
 });

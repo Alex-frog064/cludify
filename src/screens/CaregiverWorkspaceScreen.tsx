@@ -14,10 +14,12 @@ import {
 } from 'react-native';
 import { CaregiverTabKey, TabKey } from '../components/BottomTabBar';
 import { ConfirmationModal } from '../components/ConfirmationModal';
+import { ConsultasChat } from '../components/ConsultasChat';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
-import { createServicio, deleteCuidador, deleteServicio, deleteUsuario, getCuidadores, getServicios, subirDocumentosVerificacion, updateCuidador, updateCuidadorDisponible, updateServicio, updateUsuario } from '../api/auth';
+import { aceptarServicio, deleteCuidador, deleteServicio, deleteUsuario, getAbuelos, getConsultas, getCuidadores, getMensajesConsulta, getServicios, subirDocumentosVerificacion, updateCuidador, updateCuidadorDisponible, updateServicio, updateUsuario } from '../api/auth';
 import { colors } from '../theme';
 import { getCurrentServiceLocation } from '../utils/currentServiceLocation';
+import { mapServicio, matchesServicioFilter, matchesServicioSearch, servicioFilters, ServicioFilter } from '../utils/servicio';
 import { Coordinates, Servicio, UserAccount } from '../types';
 
 type Props = {
@@ -27,14 +29,15 @@ type Props = {
   onSaveLocation: (location: string, coordinates?: Coordinates) => Promise<void> | void;
   onUpdateUser: (user: UserAccount) => void;
   onSignOut: () => void;
+  onOpenConsulta: (consultaId: number) => void;
+  onOpenPaciente: (abueloId: number, familiarNombre?: string, consultaId?: number) => void;
+  onOpenClient: (familiarId: number, familiarNombre: string, consultaId: number) => void;
+  activeUntil?: number | null;
+  onAvailabilityChange?: (disponible: boolean) => void;
 };
 
-type NotificationCategory = 'Todas' | 'Solicitudes' | 'Opiniones' | 'Ofertas' | 'Mensajes';
-type ProfileConfirmation = 'discardProfile' | 'removeProfile' | 'deleteAccount';
-
-const categories: NotificationCategory[] = ['Todas', 'Solicitudes', 'Opiniones', 'Ofertas', 'Mensajes'];
-
-const notifications: {
+type NotificationCategory = 'Todas' | 'Cuenta' | 'Mensajes' | 'Servicios';
+type NotificationItem = {
   id: string;
   category: Exclude<NotificationCategory, 'Todas'>;
   icon: string;
@@ -42,119 +45,60 @@ const notifications: {
   body: string;
   time: string;
   target: TabKey;
-}[] = [
-  {
-    id: 'request',
-    category: 'Solicitudes',
-    icon: '▣',
-    title: 'Nueva solicitud de cuidado',
-    body: 'Laura busca apoyo para su papá mañana en Del Valle.',
-    time: 'Hace 12 min',
-    target: 'clients',
-  },
-  {
-    id: 'opinion',
-    category: 'Opiniones',
-    icon: '•',
-    title: 'Recibiste una nueva opinión',
-    body: '“María fue muy atenta y puntual. La recomendamos.”',
-    time: 'Hace 2 h',
-    target: 'profile',
-  },
-  {
-    id: 'offer',
-    category: 'Ofertas',
-    icon: '•',
-    title: 'Nueva oportunidad cerca de ti',
-    body: 'Una familia en Narvarte necesita compañía este fin de semana.',
-    time: 'Ayer',
-    target: 'clients',
-  },
-  {
-    id: 'message',
-    category: 'Mensajes',
-    icon: '○',
-    title: 'Tienes un mensaje nuevo',
-    body: 'Laura: Hola, ¿podrías contarme sobre tu experiencia?',
-    time: 'Ayer',
-    target: 'messages',
-  },
-];
-
-const clients = [
-  {
-    id: 'laura',
-    name: 'Laura Hernández',
-    relationship: 'Hija de Roberto · solicita cuidado',
-    location: 'Del Valle, CDMX',
-    preview: 'Hola, quisiera conocer tu disponibilidad.',
-    initials: 'LH',
-    color: '#E8F4F2',
-  },
-  {
-    id: 'andrea',
-    name: 'Andrea Pérez',
-    relationship: 'Familiar · contacto reciente',
-    location: 'Narvarte, CDMX',
-    preview: 'Muchas gracias por el acompañamiento.',
-    initials: 'AP',
-    color: '#FFF0E6',
-  },
-  {
-    id: 'roberto',
-    name: 'Roberto Castillo',
-    relationship: 'Hijo de Elena · cliente',
-    location: 'Nápoles, CDMX',
-    preview: '¿Tienes espacio el viernes por la tarde?',
-    initials: 'RC',
-    color: '#E9EEFA',
-  },
-];
-
-const initialMessages: Record<string, string[]> = {
-  laura: [
-    'Hola, vi tu perfil y me gustaría saber si estás disponible mañana.',
-    '¡Hola! Sí, puedo platicarte de los horarios que tengo.',
-  ],
-  andrea: [
-    'Gracias por acompañar a mi mamá esta semana.',
-    'Con mucho gusto, fue un placer conocerla.',
-  ],
-  roberto: ['¿Tienes espacio el viernes por la tarde?'],
+  consultaId?: number;
+  abueloId?: number;
+  familiarId?: number;
+  familiarNombre?: string;
 };
+type ProfileConfirmation = 'discardProfile' | 'removeProfile' | 'deleteAccount';
 
-function toApiServicio(s: Servicio) {
-  return {
-    abuelo_id: s.abuelo_id,
-    cuidador_id: s.cuidador_id,
-    nota: s.nota,
-    inicio: s.inicio,
-    fin: s.fin,
-    tarifa_hora: s.tarifa_hora,
-    total: s.total,
-    comision: s.comision,
-    estado: s.estado,
-    estado_pago: s.estado_pago,
-  };
+const categories: NotificationCategory[] = ['Todas', 'Cuenta', 'Mensajes', 'Servicios'];
+
+function countUnanswered(mensajes: { emisor_id: number; emisor?: { rol?: string } }[], caregiverId: number) {
+  let total = 0;
+  for (let index = mensajes.length - 1; index >= 0; index -= 1) {
+    const mensaje = mensajes[index];
+    const rol = mensaje.emisor?.rol;
+    if (mensaje.emisor_id === caregiverId || rol === 'cuidador' || rol === 'caregiver') break;
+    total += 1;
+  }
+  return total;
 }
 
-function emptyServicio(cuidadorId: number): Servicio {
-  const now = new Date();
-  const end = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-  return { id: 0, abuelo_id: 0, cuidador_id: cuidadorId, nota: '', inicio: now.toISOString(), fin: end.toISOString(), tarifa_hora: 0, total: 0, comision: 0, estado: 'activo', estado_pago: 'pendiente' };
+function relativeTime(value?: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const minutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+  if (minutes < 1) return 'ahora';
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  return `hace ${Math.round(hours / 24)} d`;
 }
 
-export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocation, onUpdateUser, onSignOut }: Props) {
+function formatServiceDate(value?: string | null) {
+  if (!value) return 'Sin fecha';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocation, onUpdateUser, onSignOut, onOpenConsulta, onOpenPaciente, onOpenClient, activeUntil, onAvailabilityChange }: Props) {
   const [selectedCategory, setSelectedCategory] = useState<NotificationCategory>('Todas');
   const [readNotifications, setReadNotifications] = useState<string[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [messages, setMessages] = useState(initialMessages);
-  const [draftMessage, setDraftMessage] = useState('');
+  const [realNotifications, setRealNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState('');
+  const [notificationsRefreshKey, setNotificationsRefreshKey] = useState(0);
+  const [unansweredCount, setUnansweredCount] = useState(0);
+  const [unansweredConsultaIds, setUnansweredConsultaIds] = useState<number[]>([]);
+  const [unansweredByConsulta, setUnansweredByConsulta] = useState<Record<number, number>>({});
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [serviciosLoading, setServiciosLoading] = useState(false);
   const [servicioError, setServicioError] = useState('');
-  const [servicioDraft, setServicioDraft] = useState<Servicio | null>(null);
-  const [servicioSaving, setServicioSaving] = useState(false);
+  const [servicioFilter, setServicioFilter] = useState<ServicioFilter>('todos');
+  const [servicioSearch, setServicioSearch] = useState('');
   const [profileEditing, setProfileEditing] = useState(false);
   const [profileConfirmation, setProfileConfirmation] = useState<ProfileConfirmation | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -293,6 +237,9 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
           disponible: profileDraft.disponible,
         },
       });
+      if (profileDraft.disponible !== user.caregiverProfile.disponible) {
+        onAvailabilityChange?.(profileDraft.disponible);
+      }
       setProfileEditing(false);
     } catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar.'); }
     finally { setProfileSaving(false); }
@@ -355,22 +302,20 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
     setServiciosLoading(true);
     setServicioError('');
     try {
-      const data = await getServicios(user.token);
+      const [data, abuelos] = await Promise.all([
+        getServicios(user.token),
+        getAbuelos(user.token).catch(() => [] as Record<string, unknown>[]),
+      ]);
+      const patientNames = new Map<number, string>();
+      abuelos.forEach((item) => {
+        const id = Number(item.id);
+        if (id) patientNames.set(id, String(item.nombre ?? `Paciente ${id}`));
+      });
+      const cuidadorId = user.caregiverProfile?.apiId ?? user.id;
       const mine = data
-        .filter((r) => Number(r.cuidador_id) === user.id)
-        .map((r) => ({
-          id: Number(r.id),
-          abuelo_id: Number(r.abuelo_id),
-          cuidador_id: Number(r.cuidador_id),
-          nota: String(r.nota ?? ''),
-          inicio: String(r.inicio ?? ''),
-          fin: String(r.fin ?? ''),
-          tarifa_hora: Number(r.tarifa_hora ?? 0),
-          total: Number(r.total ?? 0),
-          comision: Number(r.comision ?? 0),
-          estado: String(r.estado ?? 'activo'),
-          estado_pago: String(r.estado_pago ?? 'pendiente'),
-        } as Servicio));
+        .map(mapServicio)
+        .filter((r) => r.cuidador_id === cuidadorId)
+        .map((r) => ({ ...r, abuelo_nombre: patientNames.get(r.abuelo_id) ?? r.abuelo_nombre }));
       setServicios(mine);
     } catch (e) {
       setServicioError(e instanceof Error ? e.message : 'No se pudieron cargar servicios.');
@@ -384,46 +329,150 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
     const timeout = setTimeout(() => { void loadServicios(); }, 0);
     return () => clearTimeout(timeout);
   }, [tab, user.id, user.token]);
-  const saveServicio = async () => {
-    if (!servicioDraft || !user.id) return;
-    if (!servicioDraft.abuelo_id) { setServicioError('Indica el abuelo_id.'); return; }
-    setServicioSaving(true);
+
+  useEffect(() => {
+    if ((tab !== 'notifications' && tab !== 'messages') || !user.token) return;
+    let active = true;
+    const load = async () => {
+      setNotificationsLoading(true);
+      setNotificationsError('');
+      try {
+        const [consultas, abuelos, servicios] = await Promise.all([
+          getConsultas(user.token),
+          getAbuelos(user.token).catch(() => [] as Record<string, unknown>[]),
+          getServicios(user.token).catch(() => [] as Record<string, unknown>[]),
+        ]);
+        const patientNames = new Map<number, string>();
+        abuelos.forEach((item) => {
+          const id = Number(item.id);
+          if (id) patientNames.set(id, String(item.nombre ?? `Paciente ${id}`));
+        });
+        const pendingByConsulta: Record<number, number> = {};
+        let pendingTotal = 0;
+        await Promise.all(consultas.map(async (consulta) => {
+          const consultaId = Number(consulta.consulta_id);
+          if (!consultaId) return;
+          try {
+            const mensajes = await getMensajesConsulta(consultaId, user.token);
+            const pending = user.id == null ? 0 : countUnanswered(mensajes, user.id);
+            if (pending > 0) {
+              pendingByConsulta[consultaId] = pending;
+              pendingTotal += pending;
+            }
+          } catch {}
+        }));
+        const items: NotificationItem[] = [];
+
+        if (user.caregiverProfile?.verificado) {
+          items.push({
+            id: 'verificacion-aprobada',
+            category: 'Cuenta',
+            icon: '✓',
+            title: 'Cuenta autorizada',
+            body: 'Tu verificación fue aprobada. Ya puedes activar tu disponibilidad.',
+            time: '',
+            target: 'profile',
+          });
+        }
+
+        consultas.forEach((consulta) => {
+          const consultaId = Number(consulta.consulta_id);
+          const familiarNombre = consulta.familiar?.nombre ?? 'Una familia';
+          const unread = Number(consulta.no_leidos ?? 0);
+          const pending = pendingByConsulta[consultaId] ?? 0;
+          items.push({
+            id: `consulta-${consultaId}`,
+            category: 'Mensajes',
+            icon: '○',
+            title: pending ? 'Mensaje sin contestar' : unread ? 'Mensaje nuevo' : 'Conversación iniciada',
+            body: pending
+              ? `${familiarNombre} lleva ${pending} mensaje${pending === 1 ? '' : 's'} sin contestar${unread ? ` (${unread} sin leer)` : ''}.`
+              : unread
+                ? `${familiarNombre} tiene ${unread} mensaje${unread === 1 ? '' : 's'} sin leer.`
+                : `${familiarNombre} inició una conversación contigo.`,
+            time: relativeTime(consulta.actualizado_en ?? consulta.creado_en),
+            target: 'messages',
+            consultaId,
+            familiarId: consulta.familiar?.id,
+            familiarNombre,
+          });
+        });
+
+        servicios
+          .filter((item) => Number(item.cuidador_id) === (user.caregiverProfile?.apiId ?? user.id))
+          .forEach((item) => {
+            const abueloId = Number(item.abuelo_id);
+            const nombre = patientNames.get(abueloId) ?? String(item.abuelos && typeof item.abuelos === 'object' && 'nombre' in item.abuelos ? String(item.abuelos.nombre) : `Paciente ${abueloId}`);
+            const pendiente = !item.aceptado_por_cuidador;
+            items.push({
+              id: `servicio-${String(item.id)}`,
+              category: 'Servicios',
+              icon: '▣',
+              title: pendiente ? 'Solicitud de servicio' : 'Servicio confirmado',
+              body: `${nombre} · ${String(item.estado ?? 'activo')} · ${pendiente ? 'Pendiente de tu aceptación' : 'Aceptado por ti'}`,
+              time: relativeTime(String(item.creado_en ?? item.inicio ?? '')),
+              target: 'clients',
+              abueloId,
+            });
+          });
+
+        if (active) {
+          setRealNotifications(items);
+          setUnansweredCount(pendingTotal);
+          setUnansweredConsultaIds(Object.keys(pendingByConsulta).map(Number));
+          setUnansweredByConsulta(pendingByConsulta);
+        }
+      } catch (e) {
+        if (active) setNotificationsError(e instanceof Error ? e.message : 'No se pudieron cargar tus avisos.');
+      } finally {
+        if (active) setNotificationsLoading(false);
+      }
+    };
+    void load();
+    const interval = setInterval(() => { void load(); }, 30000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [tab, user.token, user.id, user.caregiverProfile?.verificado, user.caregiverProfile?.apiId, notificationsRefreshKey]);
+  const acceptServicioRequest = async (id: number) => {
     setServicioError('');
     try {
-      const payload = toApiServicio({ ...servicioDraft, cuidador_id: user.id });
-      if (servicioDraft.id) await updateServicio(servicioDraft.id, payload, user.token);
-      else await createServicio(payload, user.token);
-      setServicioDraft(null);
+      await aceptarServicio(id, user.token);
       await loadServicios();
+      setNotificationsRefreshKey((key) => key + 1);
+      Alert.alert('Servicio aceptado', 'El chat de la cita ya está disponible para ambas partes.');
     } catch (e) {
-      setServicioError(e instanceof Error ? e.message : 'No se pudo guardar el servicio.');
-    } finally {
-      setServicioSaving(false);
+      setServicioError(e instanceof Error ? e.message : 'No se pudo aceptar el servicio.');
     }
   };
 
-  const removeServicio = async (id: number) => {
+  const rejectServicioRequest = async (id: number) => {
     setServicioError('');
-    try { await deleteServicio(id, user.token); await loadServicios(); }
-    catch (e) { setServicioError(e instanceof Error ? e.message : 'No se pudo eliminar el servicio.'); }
+    try {
+      await updateServicio(id, { estado: 'cancelado' }, user.token);
+      await loadServicios();
+      setNotificationsRefreshKey((key) => key + 1);
+      Alert.alert('Servicio rechazado', 'La solicitud quedó cancelada.');
+    } catch (e) {
+      setServicioError(e instanceof Error ? e.message : 'No se pudo rechazar el servicio.');
+    }
   };
 
-  const openChat = (clientId: string) => {
-    setSelectedClientId(clientId);
-    onSelectTab('messages');
+  const deleteServicioRequest = async (id: number) => {
+    setServicioError('');
+    try {
+      await deleteServicio(id, user.token);
+      await loadServicios();
+      setNotificationsRefreshKey((key) => key + 1);
+    } catch (e) {
+      setServicioError(e instanceof Error ? e.message : 'No se pudo eliminar el servicio.');
+    }
   };
 
-  const sendMessage = () => {
-    const text = draftMessage.trim();
-    if (!text || !selectedClientId) return;
-    setMessages((current) => ({
-      ...current,
-      [selectedClientId]: [...(current[selectedClientId] ?? []), text],
-    }));
-    setDraftMessage('');
-  };
-
-  const activeClient = clients.find((client) => client.id === selectedClientId);
+  const shownServicios = servicios
+    .filter((item) => matchesServicioFilter(item, servicioFilter))
+    .filter((item) => matchesServicioSearch(item, servicioSearch));
 
   return (
     <View style={styles.screen}>
@@ -446,11 +495,24 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
           <View style={styles.summaryCard}>
             <View style={styles.summaryIcon}><Text style={styles.summaryIconText}>N</Text></View>
             <View style={styles.summaryCopy}>
-              <Text style={styles.summaryTitle}>Tienes novedades</Text>
-              <Text style={styles.summarySubtitle}>Revisa lo que está pasando con tu perfil.</Text>
+              <Text style={styles.summaryTitle}>{unansweredCount ? `${unansweredCount} mensaje${unansweredCount === 1 ? '' : 's'} sin contestar` : 'Tienes novedades'}</Text>
+              <Text style={styles.summarySubtitle}>{unansweredConsultaIds.length ? `${unansweredConsultaIds.length} conversación${unansweredConsultaIds.length === 1 ? '' : 'es'} esperando tu respuesta.` : 'Revisa lo que está pasando con tu perfil.'}</Text>
             </View>
-            <View style={styles.countBadge}><Text style={styles.countText}>{notifications.length}</Text></View>
+            <View style={styles.countBadge}><Text style={styles.countText}>{realNotifications.length}</Text></View>
           </View>
+          {unansweredCount > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setSelectedCategory('Mensajes');
+                if (unansweredConsultaIds.length) onOpenConsulta(unansweredConsultaIds[0]);
+              }}
+              style={styles.pendingBanner}
+            >
+              <Text style={styles.pendingBannerTitle}>{unansweredCount} mensaje{unansweredCount === 1 ? '' : 's'} sin contestar</Text>
+              <Text style={styles.pendingBannerText}>{unansweredConsultaIds.length} conversación{unansweredConsultaIds.length === 1 ? '' : 'es'} · Toca para responder</Text>
+            </Pressable>
+          )}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
             {categories.map((category) => (
               <Pressable
@@ -465,7 +527,12 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
             ))}
           </ScrollView>
           <Text style={styles.sectionEyebrow}>RECIENTES</Text>
-          {notifications
+          {notificationsLoading ? <ActivityIndicator color={colors.tealDark} style={{ marginTop: 12 }} /> : null}
+          {!!notificationsError && <Text style={styles.locationError}>{notificationsError}</Text>}
+          {!notificationsLoading && realNotifications.length === 0 && (
+            <Text style={styles.demoNote}>Todavía no hay avisos para mostrar.</Text>
+          )}
+          {realNotifications
             .filter((item) => selectedCategory === 'Todas' || item.category === selectedCategory)
             .map((item) => {
               const isRead = readNotifications.includes(item.id);
@@ -475,14 +542,14 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
                   key={item.id}
                   onPress={() => {
                     setReadNotifications((current) => current.includes(item.id) ? current : [...current, item.id]);
-                    if (item.target === 'messages' || item.target === 'clients') onSelectTab(item.target);
+                    if (item.consultaId) onOpenConsulta(item.consultaId);
+                    else if (item.abueloId) onOpenPaciente(item.abueloId, item.familiarNombre);
+                    else onSelectTab(item.target);
                   }}
                   style={[styles.notificationCard, !isRead && styles.unreadCard]}
                 >
-                  <View style={[styles.notificationIcon, item.category === 'Opiniones' && styles.reviewIcon]}>
-                    <Text style={[styles.notificationIconText, item.category === 'Opiniones' && styles.reviewIconText]}>
-                      {item.icon}
-                    </Text>
+                  <View style={styles.notificationIcon}>
+                    <Text style={styles.notificationIconText}>{item.icon}</Text>
                   </View>
                   <View style={styles.notificationCopy}>
                     <View style={styles.notificationTitleLine}>
@@ -490,122 +557,84 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
                       {!isRead && <View style={styles.unreadDot} />}
                     </View>
                     <Text style={styles.notificationBody}>{item.body}</Text>
-                    <Text style={styles.notificationMeta}>{item.category} · {item.time}</Text>
+                    <Text style={styles.notificationMeta}>{item.category}{item.time ? ` · ${item.time}` : ''}</Text>
                   </View>
                 </Pressable>
               );
             })}
-          <Text style={styles.demoNote}>Avisos de ejemplo · no están conectados a un servicio.</Text>
         </ScrollView>
       )}
 
       {tab === 'messages' && (
-        activeClient ? (
-          <View style={styles.chatScreen}>
-            <View style={styles.chatHeader}>
-              <Pressable accessibilityLabel="Volver a mensajes" onPress={() => setSelectedClientId(null)} style={styles.chatBack}>
-                <Text style={styles.chatBackText}>‹</Text>
-              </Pressable>
-              <Avatar initials={activeClient.initials} color={activeClient.color} size={38} />
-              <View style={styles.chatHeaderCopy}>
-                <Text style={styles.chatName}>{activeClient.name}</Text>
-                <Text style={styles.chatStatus}>Contacto de cliente · demostración</Text>
-              </View>
-            </View>
-            <ScrollView contentContainerStyle={styles.chatContent} showsVerticalScrollIndicator={false}>
-              <Text style={styles.chatDate}>HOY</Text>
-              {(messages[activeClient.id] ?? []).map((message, index) => {
-                const isOwnMessage = index >= (initialMessages[activeClient.id]?.length ?? 0) || index % 2 === 1;
-                return (
-                  <View key={`${activeClient.id}-${index}`} style={[styles.messageBubble, isOwnMessage && styles.ownMessage]}>
-                    <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>{message}</Text>
-                  </View>
-                );
-              })}
-              <Text style={styles.demoNote}>Conversación de muestra · no se envían mensajes.</Text>
-            </ScrollView>
-            <View style={styles.composer}>
-              <TextInput
-                accessibilityLabel="Escribe un mensaje"
-                onChangeText={setDraftMessage}
-                onSubmitEditing={sendMessage}
-                placeholder="Escribe un mensaje..."
-                placeholderTextColor="#91A0A3"
-                returnKeyType="send"
-                style={styles.composerInput}
-                value={draftMessage}
-              />
-              <Pressable accessibilityLabel="Enviar mensaje de demostración" onPress={sendMessage} style={styles.sendButton}>
-                <Text style={styles.sendButtonText}>Enviar</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-            <Text style={styles.pageTitle}>Mensajes</Text>
-            <Text style={styles.subtitle}>Conversaciones directas con las familias.</Text>
-            {clients.map((client) => (
-              <Pressable key={client.id} onPress={() => setSelectedClientId(client.id)} style={styles.conversationCard}>
-                <Avatar initials={client.initials} color={client.color} size={49} />
-                <View style={styles.conversationCopy}>
-                  <View style={styles.conversationTitleLine}>
-                    <Text style={styles.conversationName}>{client.name}</Text>
-                    <Text style={styles.conversationTime}>10:42</Text>
-                  </View>
-                  <Text numberOfLines={1} style={styles.conversationPreview}>{client.preview}</Text>
-                  <Text style={styles.conversationPlace}>{client.location}</Text>
-                </View>
-              </Pressable>
-            ))}
-            <Text style={styles.demoNote}>Mensajes de demostración · no están conectados a un servicio.</Text>
-          </ScrollView>
-        )
+        <ConsultasChat
+          token={user.token}
+          currentUserId={user.id}
+          viewerRole="caregiver"
+          onOpenClient={onOpenClient}
+          unansweredCount={unansweredCount}
+          unansweredConsultaIds={unansweredConsultaIds}
+          unansweredByConsulta={unansweredByConsulta}
+          onMessagesChanged={() => setNotificationsRefreshKey((key) => key + 1)}
+        />
       )}
 
       {tab === 'clients' && (
         <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
           <Text style={styles.pageTitle}>Servicios</Text>
-          <Text style={styles.subtitle}>Gestiona los servicios que ofreces como cuidador.</Text>
-          <Pressable accessibilityRole="button" onPress={() => setServicioDraft(emptyServicio(user.id ?? 0))} style={styles.saveLocationButton}>
-            <Text style={styles.saveLocationText}>Agregar servicio</Text>
-          </Pressable>
+          <Text style={styles.subtitle}>Busca, acepta o rechaza las solicitudes de las familias.</Text>
+          <TextInput
+            onChangeText={setServicioSearch}
+            placeholder="Buscar por paciente, nota, estado o ID"
+            placeholderTextColor="#91A0A3"
+            style={styles.serviceSearch}
+            value={servicioSearch}
+          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.serviceFilters}>
+            {servicioFilters.map((filter) => (
+              <Pressable
+                key={filter.key}
+                onPress={() => setServicioFilter(filter.key)}
+                style={[styles.serviceFilterChip, servicioFilter === filter.key && styles.serviceFilterChipActive]}
+              >
+                <Text style={[styles.serviceFilterText, servicioFilter === filter.key && styles.serviceFilterTextActive]}>{filter.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
           {serviciosLoading ? <ActivityIndicator color={colors.tealDark} style={{ marginTop: 12 }} /> : null}
           {servicioError ? <Text style={styles.locationError}>{servicioError}</Text> : null}
-          {servicios.map((s) => (
+          {!serviciosLoading && servicios.length === 0 && <Text style={styles.demoNote}>No tienes solicitudes de servicio todavía.</Text>}
+          {!serviciosLoading && servicios.length > 0 && shownServicios.length === 0 && <Text style={styles.demoNote}>No hay servicios con ese filtro o búsqueda.</Text>}
+          {shownServicios.map((s) => (
             <View key={s.id} style={styles.detailsCard}>
-              <Text style={styles.sectionTitle}>{s.nota || `Servicio #${s.id}`}</Text>
-              <Text style={styles.detailText}>Abuelo: {s.abuelo_id} · {s.estado} · Pago: {s.estado_pago}</Text>
-              <Text style={styles.profileDescription}>{s.inicio} - {s.fin}</Text>
+              <View style={styles.serviceTopLine}>
+                <Text style={styles.sectionTitle}>{s.abuelo_nombre ?? `Paciente ${s.abuelo_id}`}</Text>
+                <Text style={styles.serviceStatus}>{s.estado}</Text>
+              </View>
+              <Text style={styles.detailText}>Servicio #{s.id} · Solicitud de {s.cuidador_nombre ?? 'una familia'}</Text>
+              <Text style={styles.profileDescription}>{s.nota || 'Sin nota'}</Text>
+              <Text style={styles.profileDescription}>{formatServiceDate(s.inicio)} → {formatServiceDate(s.fin)}</Text>
               <Text style={styles.profileDescription}>${s.tarifa_hora}/h · Total ${s.total} · Comisión ${s.comision}</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                <Pressable onPress={() => setServicioDraft({ ...s })} style={styles.messageAction}><Text style={styles.messageActionText}>Editar</Text></Pressable>
-                <Pressable onPress={() => void removeServicio(s.id)} style={styles.messageAction}><Text style={styles.messageActionText}>Eliminar</Text></Pressable>
+              <Text style={styles.serviceMeta}>
+                Pago: {s.estado_pago} · Familiar: {s.aceptado_por_familiar ? 'aceptó' : 'pendiente'} · Tú: {s.aceptado_por_cuidador ? 'aceptaste' : 'pendiente'}
+              </Text>
+              <View style={styles.serviceActions}>
+                <Pressable onPress={() => onOpenPaciente(s.abuelo_id)} style={styles.messageAction}><Text style={styles.messageActionText}>Ver paciente</Text></Pressable>
+                {!s.aceptado_por_cuidador && s.estado === 'activo' && (
+                  <Pressable onPress={() => void acceptServicioRequest(s.id)} style={styles.acceptButton}>
+                    <Text style={styles.acceptButtonText}>Aceptar</Text>
+                  </Pressable>
+                )}
+                {!s.aceptado_por_cuidador && s.estado === 'activo' && (
+                  <Pressable onPress={() => void rejectServicioRequest(s.id)} style={styles.rejectButton}>
+                    <Text style={styles.rejectButtonText}>Rechazar</Text>
+                  </Pressable>
+                )}
+                <Pressable onPress={() => void deleteServicioRequest(s.id)} style={styles.deleteButton}>
+                  <Text style={styles.deleteButtonText}>Eliminar</Text>
+                </Pressable>
               </View>
             </View>
           ))}
-          {!serviciosLoading && !servicios.length ? <Text style={styles.demoNote}>No tienes servicios registrados.</Text> : null}
-
-          <Modal visible={!!servicioDraft} animationType="slide" transparent onRequestClose={() => setServicioDraft(null)}>
-            <View style={styles.modalBackdrop}>
-              <View style={styles.modalCard}>
-                <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-                  <Text style={styles.pageTitle}>{servicioDraft?.id ? 'Editar servicio' : 'Nuevo servicio'}</Text>
-                  <TextInput style={styles.locationInput} placeholder="Abuelo ID" keyboardType="numeric" value={servicioDraft?.abuelo_id ? String(servicioDraft.abuelo_id) : ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, abuelo_id: Number(v.replace(/\D/g, '') || 0) } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Nota" value={servicioDraft?.nota ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, nota: v } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Inicio ISO (2026-01-15T08:00:00Z)" value={servicioDraft?.inicio ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, inicio: v } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Fin ISO (2026-01-15T10:00:00Z)" value={servicioDraft?.fin ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, fin: v } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Tarifa hora" keyboardType="numeric" value={String(servicioDraft?.tarifa_hora ?? '')} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, tarifa_hora: Number(v.replace(/[^\d.]/g, '') || 0) } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Total" keyboardType="numeric" value={String(servicioDraft?.total ?? '')} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, total: Number(v.replace(/[^\d.]/g, '') || 0) } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Comisión" keyboardType="numeric" value={String(servicioDraft?.comision ?? '')} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, comision: Number(v.replace(/[^\d.]/g, '') || 0) } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Estado (activo/completado/cancelado)" value={servicioDraft?.estado ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, estado: v } : d)} />
-                  <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Estado pago (pendiente/pagado)" value={servicioDraft?.estado_pago ?? ''} onChangeText={(v) => setServicioDraft((d) => d ? { ...d, estado_pago: v } : d)} />
-                  {servicioError ? <Text style={styles.locationError}>{servicioError}</Text> : null}
-                  <Pressable disabled={servicioSaving} onPress={() => void saveServicio()} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>{servicioSaving ? 'Guardando...' : 'Guardar'}</Text></Pressable>
-                  <Pressable onPress={() => setServicioDraft(null)} style={styles.signOutButton}><Text style={styles.signOutText}>Cancelar</Text></Pressable>
-                </ScrollView>
-              </View>
-            </View>
-          </Modal>
         </ScrollView>
       )}
 
@@ -613,7 +642,6 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
         <ScrollView contentContainerStyle={styles.profilePage} showsVerticalScrollIndicator={false}>
           <View style={styles.profileHero}>
             <View style={styles.profileTopLine}>
-              <Text style={styles.profilePageTitle}>Perfil</Text>
               <View style={[styles.profileCheckBadge, user.caregiverProfile.verificado && styles.profileCheckBadgeVerified]}>
                 <Text style={[styles.profileCheckText, user.caregiverProfile.verificado && styles.profileCheckTextVerified]}>
                   {user.caregiverProfile.verificado ? '✓' : '!'}
@@ -655,7 +683,11 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
                     {profileDraft.disponible && user.caregiverProfile.verificado ? 'Disponible para recibir servicios' : 'No disponible'}
                   </Text>
                   <Text style={styles.profileAvailabilityHint}>
-                    {user.caregiverProfile.verificado ? 'Controla si las familias pueden encontrarte' : 'Completa tu verificación para activarte'}
+                    {!user.caregiverProfile.verificado
+                      ? 'Completa tu verificación para activarte'
+                      : profileDraft.disponible && activeUntil
+                        ? 'Apareces en el mapa y cercanos · se desactiva a los 30 minutos'
+                        : 'Enciéndelo para aparecer en el mapa y en cercanos'}
                   </Text>
                 </View>
                 <Pressable
@@ -669,15 +701,16 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
                       );
                       return;
                     }
-                    const next = !profileDraft.disponible;
-                    setProfileDraft((d) => ({ ...d, disponible: next }));
-                    onUpdateUser({ ...user, caregiverProfile: { ...user.caregiverProfile!, disponible: next } });
-                    if (!user.caregiverProfile?.apiId) return;
-                    setProfileError('');
-                    void (async () => {
-                      try { await updateCuidadorDisponible(user.caregiverProfile!.apiId!, next, user.token); }
-                      catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar disponibilidad, se reintentará al guardar.'); }
-                    })();
+                      const next = !profileDraft.disponible;
+                      setProfileDraft((d) => ({ ...d, disponible: next }));
+                      onUpdateUser({ ...user, caregiverProfile: { ...user.caregiverProfile!, disponible: next } });
+                      onAvailabilityChange?.(next);
+                      if (!user.caregiverProfile?.apiId) return;
+                      setProfileError('');
+                      void (async () => {
+                        try { await updateCuidadorDisponible(user.caregiverProfile!.apiId!, next, user.token); }
+                        catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar disponibilidad, se reintentará al guardar.'); }
+                      })();
                   }}
                   style={[styles.switchTrack, profileDraft.disponible && styles.switchTrackOn, !user.caregiverProfile.verificado && styles.switchTrackDisabled]}
                 >
@@ -897,14 +930,6 @@ function LocationEditor({
   );
 }
 
-function Avatar({ initials, color, size }: { initials: string; color: string; size: number }) {
-  return (
-    <View style={[styles.avatar, { backgroundColor: color, height: size, width: size, borderRadius: size / 2 }]}>
-      <Text style={[styles.avatarText, { fontSize: Math.max(13, size * 0.25) }]}>{initials}</Text>
-    </View>
-  );
-}
-
 function ProfileStat({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.profileStat}>
@@ -914,15 +939,6 @@ function ProfileStat({ value, label }: { value: string; label: string }) {
   );
 }
 
-function initialsFor(name: string) {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join('')
-    .toUpperCase();
-}
-
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   page: { paddingHorizontal: 19, paddingTop: 24, paddingBottom: 30 },
@@ -930,8 +946,7 @@ const styles = StyleSheet.create({
   pageTitle: { color: colors.ink, fontSize: 25, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
   profileHero: { backgroundColor: '#ECEEF6', borderRadius: 25, marginHorizontal: -16, marginTop: -12, paddingHorizontal: 16, paddingTop: 13 },
-  profileTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  profilePageTitle: { color: '#20212B', fontSize: 25, fontWeight: '800' },
+  profileTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'flex-end' },
   profileCheckBadge: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 22, height: 42, justifyContent: 'center', width: 42 },
   profileCheckBadgeVerified: { backgroundColor: '#E1F3EA' },
   profileCheckText: { color: '#9B6D25', fontSize: 18, fontWeight: '800' },
@@ -968,6 +983,9 @@ const styles = StyleSheet.create({
   summarySubtitle: { color: colors.muted, fontSize: 10, marginTop: 4 },
   countBadge: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 13, height: 26, justifyContent: 'center', width: 26 },
   countText: { color: colors.white, fontSize: 11, fontWeight: '800' },
+  pendingBanner: { backgroundColor: '#FFF5DB', borderRadius: 14, marginTop: 10, padding: 12 },
+  pendingBannerTitle: { color: '#8A6417', fontSize: 11, fontWeight: '800' },
+  pendingBannerText: { color: '#A77A20', fontSize: 9, marginTop: 4 },
   categoryScroller: { flexGrow: 0, marginBottom: 22, marginTop: 17 },
   categoryChip: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 17, borderWidth: 1, marginRight: 7, paddingHorizontal: 12, paddingVertical: 8 },
   selectedCategoryChip: { backgroundColor: colors.ink, borderColor: colors.ink },
@@ -1039,6 +1057,22 @@ const styles = StyleSheet.create({
   saveLocationButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 10, marginTop: 9, paddingVertical: 10 },
   saveLocationText: { color: colors.white, fontSize: 10, fontWeight: '800' },
   detailsCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginTop: 12, padding: 14 },
+  serviceSearch: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 11, borderWidth: 1, color: colors.ink, fontSize: 11, marginTop: 14, paddingHorizontal: 11, paddingVertical: 9 },
+  serviceFilters: { flexGrow: 0, marginBottom: 10, marginTop: 10 },
+  serviceFilterChip: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginRight: 7, paddingHorizontal: 11, paddingVertical: 7 },
+  serviceFilterChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  serviceFilterText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
+  serviceFilterTextActive: { color: colors.white },
+  serviceTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  serviceStatus: { backgroundColor: colors.tealPale, borderRadius: 9, color: colors.tealDark, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
+  serviceMeta: { color: colors.tealDark, fontSize: 9, lineHeight: 13, marginTop: 7 },
+  serviceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 9 },
+  acceptButton: { backgroundColor: colors.tealDark, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
+  acceptButtonText: { color: colors.white, fontSize: 9, fontWeight: '800' },
+  rejectButton: { backgroundColor: '#FFF5DB', borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
+  rejectButtonText: { color: '#8A6417', fontSize: 9, fontWeight: '800' },
+  deleteButton: { backgroundColor: '#FDECEC', borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
+  deleteButtonText: { color: '#B23B3B', fontSize: 9, fontWeight: '800' },
   profileSectionCard: { borderColor: '#E8E8EF', borderRadius: 21, marginTop: 13, padding: 17, shadowColor: '#24283D', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.035, shadowRadius: 10, elevation: 1 },
   profileSectionHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   profileSectionHint: { color: colors.muted, fontSize: 9, marginTop: 3 },

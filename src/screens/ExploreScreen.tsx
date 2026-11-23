@@ -4,10 +4,10 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDim
 import * as Location from 'expo-location';
 import { CaregiverCard } from '../components/CaregiverCard';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
-import { getCuidadoresMapa } from '../api/auth';
+import { loadVisibleCaregivers } from '../utils/visibleCaregivers';
 import { Caregiver, Coordinates } from '../types';
 import { colors } from '../theme';
-import { filterNearbyCaregivers, mapCaregiver, nearbyRadiusKm } from '../utils/nearbyCaregivers';
+import { filterNearbyCaregivers } from '../utils/nearbyCaregivers';
 import type { NearbyCaregiver } from '../utils/nearbyCaregivers';
 
 type Props = { onSelectCaregiver: (caregiver: Caregiver) => void; token?: string };
@@ -66,9 +66,9 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
     let active = true;
     const loadCaregivers = async () => {
       try {
-        const data = await getCuidadoresMapa(token);
+        const data = await loadVisibleCaregivers(token);
         if (!active) return;
-        setCaregivers(data.map(mapCaregiver).filter((c): c is NearbyCaregiver => !!c));
+        setCaregivers(data);
         setMapError('');
       } catch (e) {
         if (active) {
@@ -90,7 +90,7 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
     () => visibleCaregivers.filter((c) => c.lat != null && c.lng != null).map((c) => ({
       id: c.id,
       label: c.name,
-      rate: `$${c.hourlyRate}/h`,
+      rate: `${c.availability} · $${c.hourlyRate}/h`,
       latitude: c.lat as number,
       longitude: c.lng as number,
       title: c.title,
@@ -169,9 +169,7 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
             <Text style={styles.noMapText}>
               {!token
                 ? 'Inicia sesión para ver los cuidadores en el mapa.'
-                : mapError || (currentLocation
-                  ? `No hay cuidadores activos a menos de ${nearbyRadiusKm} km. Deben estar verificados y con ubicación reciente (2 min).`
-                  : 'No hay cuidadores activos en el mapa. Activa la ubicación para filtrar por cercanía.')}
+                : mapError || 'No hay cuidadores activos. Deben tener el switch de disponible encendido y ubicación reciente.'}
             </Text>
           ) : null}
 
@@ -218,8 +216,8 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
               <Text style={styles.resultsSubtitle}>
                 {currentLocation
                   ? showCaregivers
-                    ? `Hasta ${nearbyRadiusKm} km desde tu ubicación`
-                    : `Toca para ver perfiles a ${nearbyRadiusKm} km a la redonda`
+                    ? 'Ordenados por distancia desde tu ubicación'
+                    : 'Toca para ver los perfiles disponibles'
                   : showCaregivers
                     ? 'Ubicación desactivada · se muestran todos'
                     : 'Toca para ver los perfiles disponibles'}

@@ -26,8 +26,10 @@ export function CaregiverCard({ caregiver, onPress, compact = false }: Props) {
           <Text style={styles.rating}>Calif. {caregiver.rating}</Text> ({caregiver.reviews} opiniones) · {caregiver.distance}
         </Text>
         <View style={styles.availabilityRow}>
-          <View style={styles.availableDot} />
-          <Text numberOfLines={1} style={styles.availability}>{caregiver.availability}</Text>
+          <View style={[styles.availableDot, caregiver.availabilityTone === 'amber' && styles.busyDot]} />
+          <Text numberOfLines={1} style={[styles.availability, caregiver.availabilityTone === 'amber' && styles.busyAvailability]}>
+            {caregiver.availability}
+          </Text>
         </View>
       </View>
       <View style={styles.priceBlock}>
@@ -64,7 +66,9 @@ const styles = StyleSheet.create({
   rating: { color: '#A87519', fontWeight: '700' },
   availabilityRow: { alignItems: 'center', flexDirection: 'row', marginTop: 7 },
   availableDot: { backgroundColor: colors.green, borderRadius: 3, height: 6, marginRight: 5, width: 6 },
+  busyDot: { backgroundColor: colors.gold },
   availability: { color: colors.green, flexShrink: 1, fontSize: 9, fontWeight: '600' },
+  busyAvailability: { color: colors.gold },
   priceBlock: { alignItems: 'flex-end', marginLeft: 6, minWidth: 58 },
   price: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   priceUnit: { color: colors.muted, fontSize: 8, marginTop: 2 },

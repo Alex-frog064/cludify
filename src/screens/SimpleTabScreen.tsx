@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { deleteUsuario, getCuidadoresMapa } from '../api/auth';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { deleteServicio, deleteUsuario, getAbuelos, getServicios } from '../api/auth';
 import { CaregiverCard } from '../components/CaregiverCard';
 import { ClientProfileSection } from '../components/ClientProfileSection';
+import { ConsultasChat } from '../components/ConsultasChat';
 import { FamilyTabKey, TabKey } from '../components/BottomTabBar';
 import { colors } from '../theme';
-import { CareRecipient, Caregiver, Coordinates, UserAccount } from '../types';
+import { CareRecipient, Caregiver, Coordinates, Servicio, UserAccount } from '../types';
 import { getCurrentCoordinates } from '../utils/currentServiceLocation';
-import { filterNearbyCaregivers, mapCaregiver, nearbyRadiusKm } from '../utils/nearbyCaregivers';
+import { mapServicio, matchesServicioFilter, matchesServicioSearch, servicioFilters, ServicioFilter } from '../utils/servicio';
+import { filterNearbyCaregivers } from '../utils/nearbyCaregivers';
+import { loadVisibleCaregivers } from '../utils/visibleCaregivers';
 import type { NearbyCaregiver } from '../utils/nearbyCaregivers';
 
 type Props = {
@@ -19,6 +22,10 @@ type Props = {
   onSaveCareRecipient: (recipient: CareRecipient) => void | Promise<void>;
   onDeleteCareRecipient: (recipientId: string) => void | Promise<void>;
   onSelectCaregiver: (caregiver: Caregiver) => void;
+  onEditServicio: (servicio: Servicio) => void;
+  servicioRefreshKey?: number;
+  activeConsultaId?: number | null;
+  onActiveConsultaChange?: (id: number | null) => void;
 };
 
 const copy: Record<FamilyTabKey, { title: string; subtitle: string; empty: string }> = {
@@ -48,6 +55,10 @@ export function SimpleTabScreen({
   onSaveCareRecipient,
   onDeleteCareRecipient,
   onSelectCaregiver,
+  onEditServicio,
+  servicioRefreshKey,
+  activeConsultaId,
+  onActiveConsultaChange,
 }: Props) {
   const content = copy[tab];
   const token = signedInUser?.token;
@@ -55,6 +66,10 @@ export function SimpleTabScreen({
   const [locationChecked, setLocationChecked] = useState(false);
   const [nearbyCaregivers, setNearbyCaregivers] = useState<NearbyCaregiver[]>([]);
   const [nearbyError, setNearbyError] = useState('');
+  const [familyServicios, setFamilyServicios] = useState<Servicio[]>([]);
+  const [familyServiciosLoading, setFamilyServiciosLoading] = useState(false);
+  const [servicioFilter, setServicioFilter] = useState<ServicioFilter>('todos');
+  const [servicioSearch, setServicioSearch] = useState('');
 
   useEffect(() => {
     if (tab !== 'care') return;
@@ -78,11 +93,9 @@ export function SimpleTabScreen({
     let active = true;
     const loadCaregivers = async () => {
       try {
-        const data = await getCuidadoresMapa(token);
+        const data = await loadVisibleCaregivers(token);
         if (!active) return;
-        setNearbyCaregivers(
-          filterNearbyCaregivers(data.map(mapCaregiver).filter((c): c is NearbyCaregiver => !!c), reference),
-        );
+        setNearbyCaregivers(filterNearbyCaregivers(data, reference));
         setNearbyError('');
       } catch (e) {
         if (active) {
@@ -95,6 +108,47 @@ export function SimpleTabScreen({
     const interval = setInterval(() => { void loadCaregivers(); }, 30000);
     return () => { active = false; clearInterval(interval); };
   }, [tab, token, reference, locationChecked]);
+
+  useEffect(() => {
+    if (tab !== 'care' || !token) return;
+    let active = true;
+    const loadServicios = async () => {
+      setFamilyServiciosLoading(true);
+      try {
+        const [servicios, abuelos] = await Promise.all([getServicios(token), getAbuelos(token)]);
+        if (!active) return;
+        const patientIds = new Set(abuelos.map((item) => Number(item.id)).filter((id) => Number.isFinite(id)));
+        setFamilyServicios(
+          servicios
+            .map(mapServicio)
+            .filter((item) => patientIds.has(item.abuelo_id))
+            .sort((a, b) => String(b.creado_en ?? '').localeCompare(String(a.creado_en ?? ''))),
+        );
+      } catch {
+        if (active) setFamilyServicios([]);
+      } finally {
+        if (active) setFamilyServiciosLoading(false);
+      }
+    };
+    void loadServicios();
+    const interval = setInterval(() => { void loadServicios(); }, 30000);
+    return () => { active = false; clearInterval(interval); };
+  }, [tab, token, servicioRefreshKey]);
+
+  const shownServicios = familyServicios
+    .filter((item) => matchesServicioFilter(item, servicioFilter))
+    .filter((item) => matchesServicioSearch(item, servicioSearch));
+
+  const removeServicioRequest = async (id: number) => {
+    if (!token) return;
+    try {
+      await deleteServicio(id, token);
+      setFamilyServicios((current) => current.filter((item) => item.id !== id));
+    } catch (e) {
+      Alert.alert('No se pudo eliminar', e instanceof Error ? e.message : 'Intenta de nuevo.');
+    }
+  };
+
   const shownCaregivers = token ? nearbyCaregivers : [];
 
   const deleteAccount = async () => {
@@ -107,6 +161,19 @@ export function SimpleTabScreen({
       Alert.alert('No se pudo eliminar la cuenta', e instanceof Error ? e.message : 'Intenta de nuevo.');
     }
   };
+
+  if (tab === 'messages') {
+    return (
+      <ConsultasChat
+        token={token}
+        currentUserId={signedInUser?.id}
+        viewerRole={signedInUser?.role ?? 'family'}
+        activeConsultaId={activeConsultaId}
+        onActiveConsultaChange={onActiveConsultaChange}
+        onExplore={() => onSelectTab('explore')}
+      />
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={tab === 'account' && signedInUser?.role === 'family' ? styles.familyScreen : styles.screen}>
@@ -192,9 +259,9 @@ export function SimpleTabScreen({
             </Pressable>
           </View>
         )
-      ) : (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyIcon}>{tab === 'care' ? '▣' : '○'}</Text>
+        ) : tab === 'care' && familyServicios.length > 0 ? null : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyIcon}>{tab === 'care' ? '▣' : '○'}</Text>
           <Text style={styles.emptyTitle}>{content.empty}</Text>
           <Text style={styles.cardText}>
             {tab === 'care'
@@ -209,10 +276,54 @@ export function SimpleTabScreen({
 
       {tab === 'care' && (
         <View style={styles.suggestions}>
-          <Text style={styles.suggestionTitle}>Cuidadores cerca de ti</Text>
+          <Text style={styles.suggestionTitle}>Mis solicitudes</Text>
+          <TextInput
+            onChangeText={setServicioSearch}
+            placeholder="Buscar por paciente, cuidador, nota o ID"
+            placeholderTextColor="#91A0A3"
+            style={styles.serviceSearch}
+            value={servicioSearch}
+          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.serviceFilters}>
+            {servicioFilters.map((filter) => (
+              <Pressable
+                key={filter.key}
+                onPress={() => setServicioFilter(filter.key)}
+                style={[styles.serviceFilterChip, servicioFilter === filter.key && styles.serviceFilterChipActive]}
+              >
+                <Text style={[styles.serviceFilterText, servicioFilter === filter.key && styles.serviceFilterTextActive]}>{filter.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {familyServiciosLoading && <ActivityIndicator color={colors.tealDark} style={{ marginBottom: 10 }} />}
+          {!familyServiciosLoading && familyServicios.length === 0 && (
+            <Text style={styles.suggestionInfo}>Todavía no has solicitado servicios.</Text>
+          )}
+          {!familyServiciosLoading && familyServicios.length > 0 && shownServicios.length === 0 && (
+            <Text style={styles.suggestionInfo}>No hay servicios con ese filtro o búsqueda.</Text>
+          )}
+          {shownServicios.map((servicio) => (
+            <View key={servicio.id} style={styles.serviceCard}>
+              <View style={styles.serviceTopLine}>
+                <Text style={styles.serviceTitle}>{servicio.abuelo_nombre ?? `Paciente ${servicio.abuelo_id}`}</Text>
+                <Text style={styles.serviceStatus}>{servicio.estado}</Text>
+              </View>
+              <Text style={styles.serviceInfo}>Cuidador: {servicio.cuidador_nombre ?? `#${servicio.cuidador_id}`}</Text>
+              <Text style={styles.serviceInfo}>{servicio.inicio} → {servicio.fin}</Text>
+              <Text style={styles.serviceNote}>{servicio.nota || 'Sin nota'}</Text>
+              <Text style={styles.serviceMeta}>
+                ${servicio.total} · Pago: {servicio.estado_pago} · Familiar: {servicio.aceptado_por_familiar ? 'aceptó' : 'pendiente'} · Cuidador: {servicio.aceptado_por_cuidador ? 'aceptó' : 'pendiente'}
+              </Text>
+              <View style={styles.serviceActions}>
+                <Pressable onPress={() => onEditServicio(servicio)} style={styles.serviceAction}><Text style={styles.serviceActionText}>Editar</Text></Pressable>
+                <Pressable onPress={() => void removeServicioRequest(servicio.id)} style={[styles.serviceAction, styles.serviceActionDanger]}><Text style={styles.serviceActionDangerText}>Eliminar</Text></Pressable>
+              </View>
+            </View>
+          ))}
+          <Text style={[styles.suggestionTitle, { marginTop: 14 }]}>Cuidadores cerca de ti</Text>
           <Text style={styles.suggestionInfo}>
             {reference
-              ? `Hasta ${nearbyRadiusKm} km desde tu ubicación`
+              ? 'Ordenados por distancia desde tu ubicación'
               : 'Ubicación desactivada · se muestran todos'}
           </Text>
           {!token && <Text style={styles.suggestionInfo}>Inicia sesión para ver cuidadores disponibles.</Text>}
@@ -228,8 +339,8 @@ export function SimpleTabScreen({
           {locationChecked && !!token && !nearbyError && shownCaregivers.length === 0 && (
             <Text style={styles.suggestionInfo}>
               {reference
-                ? `No hay cuidadores activos a menos de ${nearbyRadiusKm} km. Deben estar verificados y con ubicación reciente (2 min).`
-                : 'No hay cuidadores activos en el mapa. Activa la ubicación para filtrar por cercanía.'}
+                  ? 'No hay cuidadores activos. Deben tener el switch de disponible encendido y ubicación reciente.'
+                  : 'No hay cuidadores activos en el mapa. Activa la ubicación para ordenar por cercanía.'}
             </Text>
           )}
         </View>
@@ -242,7 +353,6 @@ function FamilyProfileHero({ user, recipientCount }: { user: UserAccount; recipi
   return (
     <View style={styles.familyHero}>
       <View style={styles.familyTopLine}>
-        <Text style={styles.familyPageTitle}>Perfil</Text>
         <View style={styles.familyTopBadge}><Text style={styles.familyTopBadgeText}>♡</Text></View>
       </View>
       <View style={styles.familyPortrait}>
@@ -299,8 +409,7 @@ const styles = StyleSheet.create({
   familyScreen: { backgroundColor: '#F0F1F7', flexGrow: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 30 },
   familyProfile: { flex: 1 },
   familyHero: { backgroundColor: '#ECEEF6', borderRadius: 25, marginHorizontal: -16, marginTop: -12, paddingHorizontal: 16, paddingTop: 13 },
-  familyTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  familyPageTitle: { color: '#20212B', fontSize: 25, fontWeight: '800' },
+  familyTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'flex-end' },
   familyTopBadge: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 22, height: 42, justifyContent: 'center', width: 42 },
   familyTopBadgeText: { color: colors.tealDark, fontSize: 22, fontWeight: '700' },
   familyPortrait: { alignItems: 'center', marginTop: 8, zIndex: 1 },
@@ -355,6 +464,24 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginTop: 10, textAlign: 'center' },
   suggestions: { marginTop: 23 },
   suggestionTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginBottom: 4 },
+  serviceSearch: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 11, borderWidth: 1, color: colors.ink, fontSize: 11, marginBottom: 9, paddingHorizontal: 11, paddingVertical: 9 },
+  serviceFilters: { flexGrow: 0, marginBottom: 10 },
+  serviceFilterChip: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginRight: 7, paddingHorizontal: 11, paddingVertical: 7 },
+  serviceFilterChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  serviceFilterText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
+  serviceFilterTextActive: { color: colors.white },
+  serviceCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 14, borderWidth: 1, marginBottom: 9, padding: 12 },
+  serviceTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  serviceTitle: { color: colors.ink, flex: 1, fontSize: 12, fontWeight: '800' },
+  serviceStatus: { backgroundColor: colors.tealPale, borderRadius: 9, color: colors.tealDark, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
+  serviceInfo: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 5 },
+  serviceNote: { color: colors.ink, fontSize: 10, lineHeight: 14, marginTop: 7 },
+  serviceMeta: { color: colors.tealDark, fontSize: 9, lineHeight: 13, marginTop: 7 },
+  serviceActions: { flexDirection: 'row', gap: 8, marginTop: 9 },
+  serviceAction: { backgroundColor: colors.tealPale, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7 },
+  serviceActionText: { color: colors.tealDark, fontSize: 9, fontWeight: '800' },
+  serviceActionDanger: { backgroundColor: '#FDECEC' },
+  serviceActionDangerText: { color: '#B23B3B', fontSize: 9, fontWeight: '800' },
   suggestionInfo: { color: colors.muted, fontSize: 11, lineHeight: 16, marginBottom: 10 },
   suggestionError: { color: '#B3261E', fontSize: 11, lineHeight: 16, marginBottom: 10 },
 });

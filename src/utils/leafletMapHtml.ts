@@ -113,6 +113,13 @@ export function createLeafletMapHtml(center: Coordinates, markers: MapMarker[], 
           .addTo(map)
           .bindPopup('Tu ubicación actual');
       }
+      if (data.markers.length) {
+        const bounds = L.latLngBounds(data.markers.map(function (marker) {
+          return [marker.latitude, marker.longitude];
+        }));
+        if (data.showCurrentLocation) bounds.extend([data.center.latitude, data.center.longitude]);
+        map.fitBounds(bounds, { padding: [48, 48], maxZoom: 14 });
+      }
       setTimeout(() => map.invalidateSize(), 150);
     </script>
   </body>

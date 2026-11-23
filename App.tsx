@@ -4,17 +4,27 @@ import { Alert, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { ClientProfileScreen } from './src/screens/ClientProfileScreen';
 import { CaregiverProfileScreen } from './src/screens/CaregiverProfileScreen';
 import { ExploreScreen } from './src/screens/ExploreScreen';
 import { SimpleTabScreen } from './src/screens/SimpleTabScreen';
 import { CaregiverOnboardingScreen } from './src/screens/CaregiverOnboardingScreen';
+import { ServiceRequestScreen } from './src/screens/ServiceRequestScreen';
 import { CaregiverWorkspaceScreen } from './src/screens/CaregiverWorkspaceScreen';
 import { BottomTabBar, CaregiverTabKey, FamilyTabKey, TabKey } from './src/components/BottomTabBar';
-import { createCuidador, getCuidadores, updateCuidadorDisponible, updateCuidadorUbicacion, updateUsuario } from './src/api/auth';
-import { Caregiver, UserAccount } from './src/types';
+import { createCuidador, createUbicacionTiempoReal, getAbuelos, getCuidadores, getServicios, iniciarConsulta, updateCuidadorDisponible, updateCuidadorUbicacion, updateUsuario } from './src/api/auth';
+import { Caregiver, Servicio, UserAccount } from './src/types';
 import { colors } from './src/theme';
 
 type AuthMode = 'login' | 'signup';
+
+const ACTIVE_WINDOW_MS = 30 * 60 * 1000;
+
+type SelectedPatient = {
+  abueloId: number;
+  familiarNombre?: string;
+  consultaId?: number;
+};
 
 function getCaregiverTab(tab: TabKey): CaregiverTabKey {
   return tab === 'messages' || tab === 'clients' || tab === 'profile' || tab === 'notifications'
@@ -29,9 +39,16 @@ function getFamilyTab(tab: TabKey): FamilyTabKey {
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('explore');
   const [selectedCaregiver, setSelectedCaregiver] = useState<Caregiver | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<SelectedPatient | null>(null);
+  const [serviceRequestCaregiver, setServiceRequestCaregiver] = useState<Caregiver | null>(null);
+  const [editingServicio, setEditingServicio] = useState<Servicio | null>(null);
+  const [servicioRefreshKey, setServicioRefreshKey] = useState(0);
+  const [activeConsultaId, setActiveConsultaId] = useState<number | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [signedInUser, setSignedInUser] = useState<UserAccount | null>(null);
   const [caregiverSetup, setCaregiverSetup] = useState<UserAccount | null>(null);
+  const [availabilityActivatedAt, setAvailabilityActivatedAt] = useState<number | null>(null);
 
   const reporterApiId = signedInUser?.caregiverProfile?.apiId;
   const reporterToken = signedInUser?.token;
@@ -70,15 +87,27 @@ export default function App() {
         if (!permission.granted) return;
         const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         if (!active) return;
-        await updateCuidadorUbicacion(
-          reporterApiId,
-          {
-            latitud: position.coords.latitude,
-            longitud: position.coords.longitude,
-            precision_metros: 10,
-          },
-          reporterToken,
-        );
+        const coords = {
+          latitud: position.coords.latitude,
+          longitud: position.coords.longitude,
+          precision_metros: 10,
+        };
+        try {
+          await updateCuidadorUbicacion(reporterApiId, coords, reporterToken);
+        } catch (e) {
+          const message = e instanceof Error ? e.message : '';
+          if (!/servicio activo/i.test(message)) return;
+          const servicios = await getServicios(reporterToken);
+          const activeService = servicios.find(
+            (item) => Number(item.cuidador_id) === reporterApiId && String(item.estado) === 'activo',
+          );
+          const abueloId = activeService ? Number(activeService.abuelo_id) : NaN;
+          if (!Number.isFinite(abueloId)) return;
+          await createUbicacionTiempoReal(
+            { ...coords, cuidador_id: reporterApiId, abuelo_id: abueloId },
+            reporterToken,
+          );
+        }
       } catch {}
     };
     void reportLocation();
@@ -93,6 +122,25 @@ export default function App() {
     };
   }, [reporterAvailable, reporterApiId, reporterToken]);
 
+  useEffect(() => {
+    if (!reporterAvailable || !availabilityActivatedAt || !reporterApiId || !reporterToken) return;
+    const deactivate = async () => {
+      try { await updateCuidadorDisponible(reporterApiId, false, reporterToken); } catch {}
+      setSignedInUser((current) => current?.caregiverProfile
+        ? { ...current, caregiverProfile: { ...current.caregiverProfile, disponible: false } }
+        : current);
+      setAvailabilityActivatedAt(null);
+      Alert.alert('Disponibilidad finalizada', 'Pasaron 30 minutos y tu perfil se desactivó automáticamente.');
+    };
+    const remaining = ACTIVE_WINDOW_MS - (Date.now() - availabilityActivatedAt);
+    if (remaining <= 0) {
+      void deactivate();
+      return;
+    }
+    const timeout = setTimeout(() => { void deactivate(); }, remaining);
+    return () => clearTimeout(timeout);
+  }, [reporterAvailable, availabilityActivatedAt, reporterApiId, reporterToken]);
+
   const openAuth = (mode: AuthMode) => setAuthMode(mode);
 
   const handleAuthComplete = (user: UserAccount) => {
@@ -100,6 +148,7 @@ export default function App() {
     if (user.role === 'caregiver') {
       if (user.caregiverProfile) {
         setSignedInUser(user);
+        setAvailabilityActivatedAt(user.caregiverProfile.disponible ? Date.now() : null);
         setActiveTab('notifications');
       } else {
         setCaregiverSetup(user);
@@ -115,11 +164,67 @@ export default function App() {
       openAuth('login');
       return;
     }
+    if (signedInUser.role !== 'family') {
+      Alert.alert('Solo familiares', 'Los cuidadores no pueden solicitar sus propios servicios.');
+      return;
+    }
+    if (!selectedCaregiver) return;
+    setServiceRequestCaregiver(selectedCaregiver);
+  };
 
-    Alert.alert(
-      'Solicitud de demostración',
-      'La solicitud se mostraría aquí. Esta versión todavía no está conectada a un servicio.',
-    );
+  const handleContactCaregiver = async () => {
+    if (!selectedCaregiver) return;
+    if (!signedInUser) {
+      openAuth('login');
+      return;
+    }
+    if (signedInUser.role !== 'family') {
+      Alert.alert('Solo familiares', 'Los cuidadores pueden ver el historial, pero no iniciar conversaciones.');
+      return;
+    }
+
+    const cuidadorId = Number(selectedCaregiver.id);
+    if (!Number.isFinite(cuidadorId)) {
+      Alert.alert('No se pudo iniciar el chat', 'Este cuidador no tiene un identificador válido.');
+      return;
+    }
+
+    setChatLoading(true);
+    try {
+      const consulta = await iniciarConsulta(cuidadorId, signedInUser.token);
+      setActiveConsultaId(Number(consulta.consulta_id));
+      setSelectedCaregiver(null);
+      setActiveTab('messages');
+    } catch (e) {
+      Alert.alert('No se pudo iniciar el chat', e instanceof Error ? e.message : 'Intenta de nuevo.');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const openPatientProfile = (abueloId: number, familiarNombre?: string, consultaId?: number) => {
+    setSelectedPatient({ abueloId, familiarNombre, consultaId });
+  };
+
+  const handleOpenClientProfile = async (familiarId: number, familiarNombre: string, consultaId: number) => {
+    if (!signedInUser?.token) return;
+    try {
+      const abuelos = await getAbuelos(signedInUser.token);
+      const found = abuelos.find((item) => Number(item.familiar_id) === familiarId);
+      if (!found || !found.id) {
+        Alert.alert('Sin paciente registrado', 'Esta familia todavía no tiene un paciente en su perfil.');
+        return;
+      }
+      openPatientProfile(Number(found.id), familiarNombre, consultaId);
+    } catch (e) {
+      Alert.alert('No se pudo abrir el perfil', e instanceof Error ? e.message : 'Intenta de nuevo.');
+    }
+  };
+
+  const handleOpenConsulta = (consultaId: number) => {
+    setActiveConsultaId(consultaId);
+    setSelectedPatient(null);
+    setActiveTab('messages');
   };
 
   const finishCaregiverProfile = async (user: UserAccount) => {
@@ -187,6 +292,7 @@ export default function App() {
         user = { ...user, role: 'caregiver', caregiverProfile: { ...existing, apiId, disponible: disponibleActivo, verificado } };
       }
       setSignedInUser(user);
+      setAvailabilityActivatedAt(user.caregiverProfile?.disponible ? Date.now() : null);
       setCaregiverSetup(null);
       setActiveTab('notifications');
     } catch (e) {
@@ -229,6 +335,70 @@ export default function App() {
     );
   }
 
+  if (selectedPatient) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
+          <StatusBar style="dark" />
+          <ClientProfileScreen
+            abueloId={selectedPatient.abueloId}
+            familiarNombre={selectedPatient.familiarNombre}
+            consultaId={selectedPatient.consultaId}
+            token={signedInUser?.token}
+            onBack={() => setSelectedPatient(null)}
+            onOpenChat={() => {
+              if (selectedPatient.consultaId) handleOpenConsulta(selectedPatient.consultaId);
+              else setSelectedPatient(null);
+            }}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
+  if (editingServicio) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
+          <StatusBar style="dark" />
+          <ServiceRequestScreen
+            servicio={editingServicio}
+            token={signedInUser?.token ?? ''}
+            onBack={() => setEditingServicio(null)}
+            onCreated={() => {
+              setEditingServicio(null);
+              setServicioRefreshKey((key) => key + 1);
+              setActiveTab('care');
+              Alert.alert('Servicio actualizado', 'Los cambios ya están disponibles en Mis cuidados.');
+            }}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
+  if (serviceRequestCaregiver) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
+          <StatusBar style="dark" />
+          <ServiceRequestScreen
+            caregiver={serviceRequestCaregiver}
+            token={signedInUser?.token ?? ''}
+            onBack={() => setServiceRequestCaregiver(null)}
+            onCreated={() => {
+              setServiceRequestCaregiver(null);
+              setSelectedCaregiver(null);
+              setServicioRefreshKey((key) => key + 1);
+              setActiveTab('care');
+              Alert.alert('Solicitud enviada', 'El cuidador verá el servicio en su apartado de Servicios.');
+            }}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
   if (selectedCaregiver) {
     return (
       <SafeAreaProvider>
@@ -238,6 +408,8 @@ export default function App() {
             caregiver={selectedCaregiver}
             onBack={() => setSelectedCaregiver(null)}
             onRequestCare={handleRequestCare}
+            onMessage={handleContactCaregiver}
+            messageLoading={chatLoading}
           />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -253,6 +425,11 @@ export default function App() {
             tab={getCaregiverTab(activeTab)}
             user={signedInUser}
             onSelectTab={setActiveTab}
+            onOpenConsulta={handleOpenConsulta}
+            onOpenPaciente={openPatientProfile}
+            onOpenClient={handleOpenClientProfile}
+            activeUntil={availabilityActivatedAt ? availabilityActivatedAt + ACTIVE_WINDOW_MS : null}
+            onAvailabilityChange={(disponible) => setAvailabilityActivatedAt(disponible ? Date.now() : null)}
             onSaveLocation={async (serviceLocation, serviceCoordinates) => {
               const apiId = signedInUser.caregiverProfile?.apiId;
               if (apiId && serviceCoordinates) {
@@ -284,6 +461,10 @@ export default function App() {
             signedInUser={signedInUser}
             onSelectTab={setActiveTab}
             onSelectCaregiver={setSelectedCaregiver}
+            onEditServicio={setEditingServicio}
+            servicioRefreshKey={servicioRefreshKey}
+            activeConsultaId={activeConsultaId}
+            onActiveConsultaChange={setActiveConsultaId}
             onOpenAuth={openAuth}
             onSignOut={() => {
               setSignedInUser(null);

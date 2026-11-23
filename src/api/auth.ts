@@ -1,3 +1,5 @@
+import type { Abuelo, ConsultaCuidador, MensajeConsulta, Ubicacion } from '../types';
+
 const API_BASE = 'https://qualify-mo00.onrender.com/api';
 
 export type RegisterPayload = {
@@ -71,6 +73,8 @@ export type ServicioPayload = {
   estado: string;
   estado_pago: string;
 };
+
+export type ServicioUpdatePayload = Partial<ServicioPayload>;
 
 export type DisponibilidadPayload = {
   cuidador_id: number;
@@ -158,6 +162,30 @@ export async function getAbuelos(token?: string) {
     throw new Error(getErrorMessage(data));
   }
   return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+}
+
+export function getAbuelo(id: number, token?: string) {
+  return request<Abuelo>(`/abuelos/${id}`, undefined, token, 'GET');
+}
+
+export function getUltimaUbicacionAbuelo(abueloId: number, token?: string) {
+  return request<Ubicacion>(`/ubicaciones/ultima/${abueloId}`, undefined, token, 'GET');
+}
+
+export function getUbicaciones(token?: string) {
+  return request<Record<string, unknown>[]>('/ubicaciones', undefined, token, 'GET');
+}
+
+export type UbicacionTiempoRealPayload = {
+  cuidador_id: number;
+  abuelo_id: number;
+  latitud: number;
+  longitud: number;
+  precision_metros?: number;
+};
+
+export function createUbicacionTiempoReal(payload: UbicacionTiempoRealPayload, token?: string) {
+  return request<Record<string, unknown>>('/ubicaciones/tiempo-real', payload, token);
 }
 
 export function updateAbuelo(id: number, payload: AbueloPayload, token?: string) {
@@ -320,12 +348,16 @@ export function createServicio(payload: ServicioPayload, token?: string) {
   return request<Record<string, unknown>>('/servicios', payload, token);
 }
 
-export function updateServicio(id: number, payload: ServicioPayload, token?: string) {
+export function updateServicio(id: number, payload: ServicioUpdatePayload, token?: string) {
   return request<Record<string, unknown>>(`/servicios/${id}`, payload, token, 'PUT');
 }
 
 export function deleteServicio(id: number, token?: string) {
   return request<Record<string, unknown>>(`/servicios/${id}`, undefined, token, 'DELETE');
+}
+
+export function aceptarServicio(id: number, token?: string) {
+  return request<Record<string, unknown>>(`/servicios/${id}/aceptar`, {}, token, 'PUT');
 }
 
 export async function getDisponibilidad(token?: string) {
@@ -347,4 +379,28 @@ export function updateDisponibilidad(id: number, payload: DisponibilidadPayload,
 
 export function deleteDisponibilidad(id: number, token?: string) {
   return request<Record<string, unknown>>(`/disponibilidad/${id}`, undefined, token, 'DELETE');
+}
+
+export function getConsultas(token?: string) {
+  return request<ConsultaCuidador[]>('/consultas', undefined, token, 'GET');
+}
+
+export function iniciarConsulta(cuidadorId: number, token?: string) {
+  return request<ConsultaCuidador>(`/consultas/cuidadores/${cuidadorId}`, {}, token);
+}
+
+export function getConsulta(consultaId: number, token?: string) {
+  return request<ConsultaCuidador>(`/consultas/${consultaId}`, undefined, token, 'GET');
+}
+
+export function getMensajesConsulta(consultaId: number, token?: string) {
+  return request<MensajeConsulta[]>(`/consultas/${consultaId}/mensajes?limite=100`, undefined, token, 'GET');
+}
+
+export function enviarMensajeConsulta(consultaId: number, contenido: string, token?: string) {
+  return request<MensajeConsulta>(`/consultas/${consultaId}/mensajes`, { contenido }, token);
+}
+
+export function marcarMensajesLeidos(consultaId: number, token?: string) {
+  return request<{ actualizados: number }>(`/consultas/${consultaId}/mensajes/leidos`, {}, token, 'PUT');
 }

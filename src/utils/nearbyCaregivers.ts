@@ -33,6 +33,7 @@ export function mapCaregiver(r: Record<string, unknown>): NearbyCaregiver | null
     families: 0,
     hourlyRate: Number(r.tarifa_hora ?? r.hourlyRate ?? 0),
     availability: 'Disponible',
+    availabilityTone: 'green',
     image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=240&h=240&fit=crop&crop=faces',
     verified: Boolean(r.verificado ?? r.verified),
     about: String(r.descripcion ?? r.about ?? ''),
@@ -47,7 +48,6 @@ export function filterNearbyCaregivers(items: NearbyCaregiver[], reference: Coor
     .flatMap((caregiver) => {
       if (caregiver.lat == null || caregiver.lng == null) return [];
       const distanceKm = distanceInKm(reference, { latitude: caregiver.lat, longitude: caregiver.lng });
-      if (distanceKm > nearbyRadiusKm) return [];
       return [{
         ...caregiver,
         distanceKm,
