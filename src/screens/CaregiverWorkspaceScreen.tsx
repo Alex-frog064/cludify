@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import { ChevronRight, Clock3, ShieldCheck, UserRound } from 'lucide-react-native';
 import {
   ActivityIndicator,
   Alert,
@@ -15,9 +16,10 @@ import {
 import { CaregiverTabKey, TabKey } from '../components/BottomTabBar';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { ConsultasChat } from '../components/ConsultasChat';
+import { EditableProfileAvatar } from '../components/EditableProfileAvatar';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
 import { aceptarServicio, deleteCuidador, deleteServicio, deleteUsuario, getAbuelos, getConsultas, getCuidadores, getMensajesConsulta, getServicios, subirDocumentosVerificacion, updateCuidador, updateCuidadorDisponible, updateServicio, updateUsuario } from '../api/auth';
-import { colors } from '../theme';
+import { secondaryColors as colors } from '../theme';
 import { getCurrentServiceLocation } from '../utils/currentServiceLocation';
 import { mapServicio, matchesServicioFilter, matchesServicioSearch, servicioFilters, ServicioFilter } from '../utils/servicio';
 import { Coordinates, Servicio, UserAccount } from '../types';
@@ -27,7 +29,7 @@ type Props = {
   user: UserAccount;
   onSelectTab: (tab: TabKey) => void;
   onSaveLocation: (location: string, coordinates?: Coordinates) => Promise<void> | void;
-  onUpdateUser: (user: UserAccount) => void;
+  onUpdateUser: Dispatch<SetStateAction<UserAccount | null>>;
   onSignOut: () => void;
   onOpenConsulta: (consultaId: number) => void;
   onOpenPaciente: (abueloId: number, familiarNombre?: string, consultaId?: number) => void;
@@ -585,7 +587,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
           <TextInput
             onChangeText={setServicioSearch}
             placeholder="Buscar por paciente, nota, estado o ID"
-            placeholderTextColor="#91A0A3"
+            placeholderTextColor={colors.muted}
             style={styles.serviceSearch}
             value={servicioSearch}
           />
@@ -643,19 +645,21 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
           <View style={styles.profileHero}>
             <View style={styles.profileTopLine}>
               <View style={[styles.profileCheckBadge, user.caregiverProfile.verificado && styles.profileCheckBadgeVerified]}>
-                <Text style={[styles.profileCheckText, user.caregiverProfile.verificado && styles.profileCheckTextVerified]}>
-                  {user.caregiverProfile.verificado ? '✓' : '!'}
-                </Text>
+                {user.caregiverProfile.verificado ? (
+                  <ShieldCheck color={colors.accent} size={21} strokeWidth={2} />
+                ) : (
+                  <Clock3 color={colors.muted} size={21} strokeWidth={2} />
+                )}
               </View>
             </View>
             <View style={styles.profilePortrait}>
-              <View style={styles.profilePortraitRing}>
-                {user.profilePhotoUri ? (
-                  <Image source={{ uri: user.profilePhotoUri }} style={styles.profilePortraitImage} />
-                ) : (
-                  <Text style={styles.profilePortraitInitial}>{user.name.charAt(0).toUpperCase()}</Text>
-                )}
-              </View>
+              <EditableProfileAvatar
+                uri={user.profilePhotoUri}
+                name={user.name}
+                size={108}
+                onChange={(uri) => onUpdateUser((current) =>
+                  current && current.email === user.email ? { ...current, profilePhotoUri: uri } : current)}
+              />
             </View>
             <View style={styles.profileSummaryCard}>
               <View style={styles.profileNameLine}>
@@ -760,12 +764,12 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
           <View style={[styles.detailsCard, styles.profileSectionCard]}>
             <Text style={styles.sectionTitle}>Tu cuenta</Text>
             <Pressable accessibilityRole="button" onPress={startEditingProfile} style={styles.profileMenuRow}>
-              <View style={styles.profileMenuIcon}><Text style={styles.profileMenuIconText}>◉</Text></View>
+              <View style={styles.profileMenuIcon}><UserRound color={colors.accent} size={21} strokeWidth={2} /></View>
               <View style={styles.profileMenuCopy}>
                 <Text style={styles.profileMenuTitle}>Información personal</Text>
                 <Text style={styles.profileMenuSubtitle}>{user.email} · {user.phone || 'Agrega tu teléfono'}</Text>
               </View>
-              <Text style={styles.profileMenuArrow}>›</Text>
+              <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
             </Pressable>
           </View>
 
@@ -797,15 +801,15 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
           <View style={styles.accountActions}>
             <Pressable disabled={profileSaving} onPress={() => setProfileConfirmation('removeProfile')} style={styles.accountActionRow}>
               <Text style={styles.accountActionTextDanger}>{profileSaving ? 'Eliminando perfil...' : 'Eliminar perfil de cuidador'}</Text>
-              <Text style={styles.profileMenuArrow}>›</Text>
+              <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
             </Pressable>
             <Pressable disabled={profileSaving} onPress={() => setProfileConfirmation('deleteAccount')} style={styles.accountActionRow}>
               <Text style={styles.accountActionTextDanger}>{profileSaving ? 'Eliminando cuenta...' : 'Eliminar cuenta'}</Text>
-              <Text style={styles.profileMenuArrow}>›</Text>
+              <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
             </Pressable>
             <Pressable onPress={onSignOut} style={styles.accountActionRow}>
               <Text style={styles.accountActionText}>Cerrar sesión</Text>
-              <Text style={styles.profileMenuArrow}>›</Text>
+              <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
             </Pressable>
           </View>
           <ConfirmationModal
@@ -916,7 +920,7 @@ function LocationEditor({
             accessibilityLabel="Ubicación del cuidador"
             onChangeText={(text) => { setValue(text); setError(''); }}
             placeholder="Etiqueta de tu zona (opcional)"
-            placeholderTextColor="#91A0A3"
+            placeholderTextColor={colors.muted}
             style={styles.locationInput}
             value={value}
           />
@@ -941,35 +945,30 @@ function ProfileStat({ value, label }: { value: string; label: string }) {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
-  page: { paddingHorizontal: 19, paddingTop: 24, paddingBottom: 30 },
-  profilePage: { backgroundColor: '#F0F1F7', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 30 },
+  page: { paddingHorizontal: 19, paddingTop: 24, paddingBottom: 48 },
+  profilePage: { backgroundColor: colors.canvas, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 52 },
   pageTitle: { color: colors.ink, fontSize: 25, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
-  profileHero: { backgroundColor: '#ECEEF6', borderRadius: 25, marginHorizontal: -16, marginTop: -12, paddingHorizontal: 16, paddingTop: 13 },
+  profileHero: { backgroundColor: colors.highlightSoft, borderRadius: 25, marginHorizontal: -16, marginTop: -12, paddingHorizontal: 16, paddingTop: 13 },
   profileTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'flex-end' },
   profileCheckBadge: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 22, height: 42, justifyContent: 'center', width: 42 },
-  profileCheckBadgeVerified: { backgroundColor: '#E1F3EA' },
-  profileCheckText: { color: '#9B6D25', fontSize: 18, fontWeight: '800' },
-  profileCheckTextVerified: { color: colors.green },
+  profileCheckBadgeVerified: { backgroundColor: colors.highlightSoft },
   profilePortrait: { alignItems: 'center', marginTop: 8, zIndex: 1 },
-  profilePortraitRing: { alignItems: 'center', backgroundColor: colors.white, borderColor: '#CDE7E8', borderRadius: 54, borderWidth: 4, height: 108, justifyContent: 'center', overflow: 'hidden', width: 108 },
-  profilePortraitImage: { height: 100, width: 100 },
-  profilePortraitInitial: { color: colors.tealDark, fontSize: 40, fontWeight: '800' },
-  profileSummaryCard: { backgroundColor: colors.white, borderColor: '#E8E8EF', borderRadius: 24, borderWidth: 1, marginBottom: 17, marginTop: -38, paddingHorizontal: 17, paddingTop: 51, paddingBottom: 16, shadowColor: '#24283D', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.07, shadowRadius: 16, elevation: 3 },
+  profileSummaryCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 24, borderWidth: 1, marginBottom: 17, marginTop: -38, paddingHorizontal: 17, paddingTop: 51, paddingBottom: 16, shadowColor: '#070707', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.07, shadowRadius: 16, elevation: 3 },
   profileNameLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   profileNameCopy: { flex: 1, paddingRight: 8 },
-  profileDisplayName: { color: '#252631', fontSize: 17, fontWeight: '800' },
+  profileDisplayName: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   profileDisplaySubtitle: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  profileRoleBadge: { backgroundColor: '#292A34', borderRadius: 15, paddingHorizontal: 11, paddingVertical: 7 },
-  profileRoleBadgeVerified: { backgroundColor: '#E1F3EA' },
+  profileRoleBadge: { backgroundColor: colors.ink, borderRadius: 15, paddingHorizontal: 11, paddingVertical: 7 },
+  profileRoleBadgeVerified: { backgroundColor: colors.highlight },
   profileRoleBadgeText: { color: colors.white, fontSize: 9, fontWeight: '800' },
-  profileRoleBadgeTextVerified: { color: colors.green },
-  profileStats: { alignItems: 'center', backgroundColor: '#F7F7FA', borderRadius: 17, flexDirection: 'row', justifyContent: 'space-around', marginTop: 16, paddingVertical: 12 },
+  profileRoleBadgeTextVerified: { color: colors.ink },
+  profileStats: { alignItems: 'center', backgroundColor: colors.soft, borderRadius: 17, flexDirection: 'row', justifyContent: 'space-around', marginTop: 16, paddingVertical: 12 },
   profileStat: { alignItems: 'center', flex: 1 },
-  profileStatValue: { color: '#292A34', fontSize: 17, fontWeight: '800' },
+  profileStatValue: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   profileStatLabel: { color: colors.muted, fontSize: 9, marginTop: 4, textAlign: 'center' },
-  profileStatDivider: { backgroundColor: '#E3E4EA', height: 30, width: 1 },
-  profileAvailability: { alignItems: 'center', backgroundColor: '#F1F5F3', borderRadius: 15, flexDirection: 'row', marginTop: 13, paddingHorizontal: 12, paddingVertical: 10 },
+  profileStatDivider: { backgroundColor: colors.line, height: 30, width: 1 },
+  profileAvailability: { alignItems: 'center', backgroundColor: colors.soft, borderRadius: 15, flexDirection: 'row', marginTop: 13, paddingHorizontal: 12, paddingVertical: 10 },
   profileAvailabilityDot: { backgroundColor: colors.gold, borderRadius: 5, height: 10, width: 10 },
   profileAvailabilityDotOn: { backgroundColor: colors.green },
   profileAvailabilityCopy: { flex: 1, marginLeft: 9 },
@@ -983,21 +982,21 @@ const styles = StyleSheet.create({
   summarySubtitle: { color: colors.muted, fontSize: 10, marginTop: 4 },
   countBadge: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 13, height: 26, justifyContent: 'center', width: 26 },
   countText: { color: colors.white, fontSize: 11, fontWeight: '800' },
-  pendingBanner: { backgroundColor: '#FFF5DB', borderRadius: 14, marginTop: 10, padding: 12 },
-  pendingBannerTitle: { color: '#8A6417', fontSize: 11, fontWeight: '800' },
-  pendingBannerText: { color: '#A77A20', fontSize: 9, marginTop: 4 },
+  pendingBanner: { backgroundColor: colors.highlightSoft, borderRadius: 14, marginTop: 10, padding: 12 },
+  pendingBannerTitle: { color: colors.ink, fontSize: 11, fontWeight: '800' },
+  pendingBannerText: { color: colors.ink, fontSize: 9, marginTop: 4 },
   categoryScroller: { flexGrow: 0, marginBottom: 22, marginTop: 17 },
   categoryChip: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 17, borderWidth: 1, marginRight: 7, paddingHorizontal: 12, paddingVertical: 8 },
   selectedCategoryChip: { backgroundColor: colors.ink, borderColor: colors.ink },
   categoryText: { color: colors.muted, fontSize: 10, fontWeight: '600' },
   selectedCategoryText: { color: colors.white },
   sectionEyebrow: { color: colors.muted, fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 9 },
-  notificationCard: { alignItems: 'flex-start', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 15, borderWidth: 1, flexDirection: 'row', marginBottom: 9, padding: 13 },
-  unreadCard: { borderColor: '#B9E0E2' },
+  notificationCard: { alignItems: 'flex-start', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 20, borderWidth: 1, flexDirection: 'row', marginBottom: 9, padding: 14 },
+  unreadCard: { borderColor: colors.tealPale },
   notificationIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 21, height: 42, justifyContent: 'center', width: 42 },
   notificationIconText: { color: colors.tealDark, fontSize: 18, fontWeight: '800' },
-  reviewIcon: { backgroundColor: '#FFF5DB' },
-  reviewIconText: { color: '#C99422' },
+  reviewIcon: { backgroundColor: colors.highlightSoft },
+  reviewIconText: { color: colors.ink },
   notificationCopy: { flex: 1, marginLeft: 10 },
   notificationTitleLine: { alignItems: 'center', flexDirection: 'row' },
   notificationTitle: { color: colors.ink, flex: 1, fontSize: 11, fontWeight: '800' },
@@ -1041,7 +1040,7 @@ const styles = StyleSheet.create({
   clientLocation: { color: colors.tealDark, fontSize: 9, marginTop: 5 },
   messageAction: { backgroundColor: colors.tealPale, borderRadius: 15, marginLeft: 7, paddingHorizontal: 10, paddingVertical: 8 },
   messageActionText: { color: colors.tealDark, fontSize: 9, fontWeight: '800' },
-  locationCard: { backgroundColor: colors.white, borderColor: '#E8E8EF', borderRadius: 21, borderWidth: 1, marginTop: 13, padding: 17 },
+  locationCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 22, borderWidth: 1, marginTop: 13, padding: 17 },
   locationHeading: { alignItems: 'center', flexDirection: 'row', marginBottom: 12 },
   locationIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 18, height: 36, justifyContent: 'center', marginRight: 9, width: 36 },
   pinOuter: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 8, height: 16, justifyContent: 'center', width: 16 },
@@ -1053,7 +1052,7 @@ const styles = StyleSheet.create({
   useLocationText: { color: colors.tealDark, fontSize: 9, fontWeight: '700' },
   mapPreview: { borderRadius: 12, height: 190, marginTop: 10, overflow: 'hidden' },
   coordinatesNote: { color: colors.muted, fontSize: 9, marginTop: 7 },
-  locationError: { color: '#C74C45', fontSize: 10, marginTop: 6 },
+  locationError: { color: colors.accent, fontSize: 10, marginTop: 6 },
   saveLocationButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 10, marginTop: 9, paddingVertical: 10 },
   saveLocationText: { color: colors.white, fontSize: 10, fontWeight: '800' },
   detailsCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginTop: 12, padding: 14 },
@@ -1064,31 +1063,29 @@ const styles = StyleSheet.create({
   serviceFilterText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
   serviceFilterTextActive: { color: colors.white },
   serviceTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  serviceStatus: { backgroundColor: colors.tealPale, borderRadius: 9, color: colors.tealDark, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
+  serviceStatus: { backgroundColor: colors.highlightSoft, borderRadius: 9, color: colors.ink, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
   serviceMeta: { color: colors.tealDark, fontSize: 9, lineHeight: 13, marginTop: 7 },
   serviceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 9 },
   acceptButton: { backgroundColor: colors.tealDark, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
   acceptButtonText: { color: colors.white, fontSize: 9, fontWeight: '800' },
-  rejectButton: { backgroundColor: '#FFF5DB', borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
-  rejectButtonText: { color: '#8A6417', fontSize: 9, fontWeight: '800' },
-  deleteButton: { backgroundColor: '#FDECEC', borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
-  deleteButtonText: { color: '#B23B3B', fontSize: 9, fontWeight: '800' },
-  profileSectionCard: { borderColor: '#E8E8EF', borderRadius: 21, marginTop: 13, padding: 17, shadowColor: '#24283D', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.035, shadowRadius: 10, elevation: 1 },
+  rejectButton: { backgroundColor: colors.highlightSoft, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
+  rejectButtonText: { color: colors.ink, fontSize: 9, fontWeight: '800' },
+  deleteButton: { backgroundColor: colors.tealPale, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
+  deleteButtonText: { color: colors.accent, fontSize: 9, fontWeight: '800' },
+  profileSectionCard: { borderColor: colors.line, borderRadius: 22, marginTop: 13, padding: 17, shadowColor: '#070707', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.035, shadowRadius: 10, elevation: 1 },
   profileSectionHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   profileSectionHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
-  verificationStateBadge: { backgroundColor: '#FFF5DF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
-  verificationStateText: { color: '#98702D', fontSize: 9, fontWeight: '800' },
+  verificationStateBadge: { backgroundColor: colors.highlightSoft, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
+  verificationStateText: { color: colors.ink, fontSize: 9, fontWeight: '800' },
   profileMenuRow: { alignItems: 'center', flexDirection: 'row', marginTop: 12, paddingVertical: 5 },
-  profileMenuIcon: { alignItems: 'center', backgroundColor: '#F1F1F6', borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
-  profileMenuIconText: { color: colors.tealDark, fontSize: 18, fontWeight: '700' },
+  profileMenuIcon: { alignItems: 'center', backgroundColor: colors.soft, borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
   profileMenuCopy: { flex: 1, marginLeft: 11 },
   profileMenuTitle: { color: colors.ink, fontSize: 11, fontWeight: '800' },
   profileMenuSubtitle: { color: colors.muted, fontSize: 9, marginTop: 4 },
-  profileMenuArrow: { color: '#7C818D', fontSize: 24, marginLeft: 8 },
-  accountActions: { backgroundColor: colors.white, borderColor: '#E8E8EF', borderRadius: 20, borderWidth: 1, marginTop: 13, paddingHorizontal: 15 },
+  accountActions: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginTop: 13, paddingHorizontal: 15 },
   accountActionRow: { alignItems: 'center', borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 48 },
   accountActionText: { color: colors.ink, fontSize: 10, fontWeight: '700' },
-  accountActionTextDanger: { color: '#B64B47', fontSize: 10, fontWeight: '700' },
+  accountActionTextDanger: { color: colors.accent, fontSize: 10, fontWeight: '700' },
   detailText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', marginTop: 7 },
   profileDescription: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 7 },
   specialties: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
@@ -1098,12 +1095,12 @@ const styles = StyleSheet.create({
   modalBackdrop: { alignItems: 'center', backgroundColor: 'rgba(17,39,41,0.5)', flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 24 },
   modalCard: { backgroundColor: colors.canvas, borderRadius: 24, maxHeight: '90%', maxWidth: 520, width: '100%' },
   modalContent: { padding: 20, paddingBottom: 24 },
-  switchTrack: { width: 48, height: 28, borderRadius: 14, backgroundColor: '#C7D4D6', padding: 2 },
+  switchTrack: { width: 48, height: 28, borderRadius: 14, backgroundColor: colors.line, padding: 2 },
   switchTrackOn: { backgroundColor: colors.tealDark },
   switchTrackDisabled: { opacity: 0.45 },
   switchThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.white },
   switchThumbOn: { marginLeft: 20 },
-  verificationBanner: { backgroundColor: '#FFF6E2', borderColor: colors.gold, borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 13 },
+  verificationBanner: { backgroundColor: colors.highlightSoft, borderColor: colors.gold, borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 13 },
   verificationBannerTitle: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   verificationBannerText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 5 },
   verificationBannerAction: { color: colors.tealDark, fontSize: 10, fontWeight: '800', marginTop: 8 },

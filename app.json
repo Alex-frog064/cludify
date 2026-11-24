@@ -12,7 +12,7 @@
     "android": {
       "package": "com.qualify.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F5F5F7",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -27,8 +27,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permite que Qualify seleccione tus documentos de verificación.",
-          "cameraPermission": "Permite que Qualify tome fotos para verificar tu cuenta."
+          "photosPermission": "Permite que Qualify seleccione fotos para tu perfil y documentos de verificación.",
+          "cameraPermission": "Permite que Qualify tome fotos para tu perfil y verificar tu cuenta."
         }
       ]
     ]

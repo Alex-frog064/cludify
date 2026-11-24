@@ -9,14 +9,15 @@ type Props = {
   center: Coordinates;
   markers: MapMarker[];
   showCurrentLocation: boolean;
+  selectedMarkerId?: string;
   onMarkerPress?: (id: string) => void;
 };
 
-export function OpenStreetMapView({ center, markers, showCurrentLocation, onMarkerPress }: Props) {
+export function OpenStreetMapView({ center, markers, showCurrentLocation, selectedMarkerId, onMarkerPress }: Props) {
   const { latitude, longitude } = center;
   const html = useMemo(
-    () => createLeafletMapHtml({ latitude, longitude }, markers, showCurrentLocation),
-    [latitude, longitude, markers, showCurrentLocation],
+    () => createLeafletMapHtml({ latitude, longitude }, markers, showCurrentLocation, selectedMarkerId),
+    [latitude, longitude, markers, selectedMarkerId, showCurrentLocation],
   );
 
   return (

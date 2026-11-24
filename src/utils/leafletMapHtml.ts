@@ -19,7 +19,12 @@ function escapeHtml(value: string) {
   });
 }
 
-export function createLeafletMapHtml(center: Coordinates, markers: MapMarker[], showCurrentLocation: boolean) {
+export function createLeafletMapHtml(
+  center: Coordinates,
+  markers: MapMarker[],
+  showCurrentLocation: boolean,
+  selectedMarkerId?: string,
+) {
   const safeMarkers = markers.map((marker) => ({
     id: marker.id,
     label: escapeHtml(marker.label),
@@ -29,7 +34,7 @@ export function createLeafletMapHtml(center: Coordinates, markers: MapMarker[], 
     latitude: marker.latitude,
     longitude: marker.longitude,
   }));
-  const mapData = JSON.stringify({ center, markers: safeMarkers, showCurrentLocation }).replace(/</g, '\\u003c');
+  const mapData = JSON.stringify({ center, markers: safeMarkers, showCurrentLocation, selectedMarkerId }).replace(/</g, '\\u003c');
 
   return `<!doctype html>
 <html lang="es">
@@ -40,23 +45,39 @@ export function createLeafletMapHtml(center: Coordinates, markers: MapMarker[], 
     <style>
       html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; }
       body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+      .leaflet-container { background: #E8ECEB; }
+      .leaflet-tile { filter: grayscale(1) saturate(.25) contrast(.94) brightness(1.04); }
       .price-marker { background: transparent; border: 0; }
+      .marker-wrap {
+        align-items: center; display: flex; height: 42px; justify-content: center;
+        position: relative; width: 96px;
+      }
+      .marker-wrap::before {
+        animation: marker-pulse 1.9s ease-out infinite; background: rgba(218,86,58,.23);
+        border-radius: 50%; content: ''; height: 32px; left: 50%; position: absolute;
+        top: 50%; transform: translate(-50%,-50%); width: 32px;
+      }
+      @keyframes marker-pulse {
+        0% { opacity: .8; transform: translate(-50%,-50%) scale(.7); }
+        100% { opacity: 0; transform: translate(-50%,-50%) scale(1.8); }
+      }
       .price-pill {
-        background: #18343A; border: 2px solid #fff; border-radius: 16px;
-        color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700;
-        padding: 6px 10px; white-space: nowrap; box-shadow: 0 2px 7px rgba(24,52,58,.22);
+        background: #DA563A; border: 2px solid #fff; border-radius: 16px;
+        color: #fff; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
+        padding: 7px 10px; position: relative; white-space: nowrap;
+        box-shadow: 0 3px 10px rgba(218,86,58,.34); z-index: 1;
       }
       .user-dot {
-        width: 16px; height: 16px; background: #178DA1; border: 3px solid white;
-        border-radius: 50%; box-shadow: 0 0 0 8px rgba(101,197,216,.25);
+        width: 16px; height: 16px; background: #DA563A; border: 3px solid white;
+        border-radius: 50%; box-shadow: 0 0 0 8px rgba(218,86,58,.22);
       }
       .leaflet-popup-content-wrapper { border-radius: 12px; }
-      .leaflet-popup-content { color: #18343A; font-size: 12px; margin: 10px 13px; }
+      .leaflet-popup-content { color: #070707; font-size: 12px; margin: 10px 13px; }
       .leaflet-control-attribution { font-size: 9px !important; }
-      .popup-line { color: #647A7D; font-size: 11px; margin-top: 3px; }
-      .popup-rate { color: #178DA1; font-size: 12px; font-weight: 800; margin-top: 7px; }
+      .popup-line { color: #6F6F73; font-size: 11px; margin-top: 3px; }
+      .popup-rate { color: #DA563A; font-size: 12px; font-weight: 800; margin-top: 7px; }
       .profile-button {
-        background: #178DA1; border: 0; border-radius: 9px; color: #fff;
+        background: #DA563A; border: 0; border-radius: 9px; color: #fff;
         cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
         margin-top: 9px; padding: 7px 11px; width: 100%;
       }
@@ -81,12 +102,21 @@ export function createLeafletMapHtml(center: Coordinates, markers: MapMarker[], 
         maxZoom: 19,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
+      if (data.showCurrentLocation && data.selectedMarkerId) {
+        const selected = data.markers.find(function (marker) { return marker.id === data.selectedMarkerId; });
+        if (selected) {
+          L.polyline(
+            [[data.center.latitude, data.center.longitude], [selected.latitude, selected.longitude]],
+            { color: '#DA563A', dashArray: '4, 8', lineCap: 'round', opacity: .7, weight: 4 }
+          ).addTo(map);
+        }
+      }
       data.markers.forEach(function (marker) {
         const icon = L.divIcon({
           className: 'price-marker',
-          html: '<button type="button" class="price-pill">' + marker.rate + '</button>',
-          iconSize: [74, 34],
-          iconAnchor: [37, 17],
+          html: '<div class="marker-wrap"><button type="button" class="price-pill">' + marker.rate + '</button></div>',
+          iconSize: [96, 42],
+          iconAnchor: [48, 21],
         });
         const popup = '<div class="popup-card"><strong>' + marker.label + '</strong>' +
           (marker.title ? '<div class="popup-line">' + marker.title + '</div>' : '') +

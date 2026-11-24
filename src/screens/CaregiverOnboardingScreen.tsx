@@ -45,16 +45,17 @@ const specialtyOptions = [
 ];
 
 export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Props) {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(account.caregiverSetupDraft ? 1 : 0);
   const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [error, setError] = useState('');
   const [isLocating, setIsLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [draft, setDraft] = useState<Draft>({
-    identificationNumber: '',
-    rfc: '',
-    professionalTitle: '',
-    serviceLocation: '',
+    identificationNumber: account.caregiverSetupDraft?.identificationNumber ?? '',
+    rfc: account.caregiverSetupDraft?.rfc ?? '',
+    professionalTitle: account.caregiverSetupDraft?.professionalTitle ?? '',
+    serviceLocation: account.caregiverSetupDraft?.serviceLocation ?? '',
+    serviceCoordinates: account.caregiverSetupDraft?.serviceCoordinates,
     description: '',
     yearsExperience: '',
     hourlyRate: '',
@@ -168,6 +169,7 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
       await onComplete({
         ...account,
         profilePhotoUri: photoUri,
+        caregiverSetupDraft: undefined,
         caregiverProfile: {
           identificationNumber: draft.identificationNumber.trim(),
           rfc: draft.rfc.trim().toUpperCase(),
@@ -418,7 +420,7 @@ function Field({
         multiline={multiline}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#95A5A8"
+        placeholderTextColor={colors.muted}
         style={[styles.input, multiline && styles.multilineInput]}
         value={value}
       />
@@ -470,7 +472,7 @@ const styles = StyleSheet.create({
   dayText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
   selectedDayText: { color: colors.white },
   scheduleLabel: { marginTop: 23 },
-  error: { color: '#C74C45', fontSize: 11, lineHeight: 16, marginTop: 6 },
+  error: { color: colors.tealDark, fontSize: 11, lineHeight: 16, marginTop: 6 },
   footer: { backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12 },
   footerNote: { color: colors.muted, fontSize: 9, marginBottom: 9, textAlign: 'center' },
   continueButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 15, paddingVertical: 14 },

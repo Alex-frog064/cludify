@@ -1,5 +1,6 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Plus, UserRoundPlus } from 'lucide-react-native';
 import {
   createAbuelo,
   createGeocerca,
@@ -17,7 +18,7 @@ import {
 import { ConfirmationModal } from './ConfirmationModal';
 import { OpenStreetMapView } from './OpenStreetMapView';
 import { getCurrentServiceLocation, searchAddressSuggestions, AddressSuggestion } from '../utils/currentServiceLocation';
-import { colors } from '../theme';
+import { secondaryColors as colors } from '../theme';
 import { CareRecipient, Geofence, Medication } from '../types';
 
 type Props = {
@@ -399,7 +400,8 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
             }}
             style={styles.addButton}
           >
-            <Text style={styles.addButtonText}>＋ Agregar</Text>
+            <UserRoundPlus color={colors.white} size={20} strokeWidth={2} />
+            <Text style={styles.addButtonText}>Agregar</Text>
           </Pressable>
         )}
       </View>
@@ -410,7 +412,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
         <View style={styles.emptyCard}><ActivityIndicator color={colors.tealDark} /></View>
       ) : profiles.length === 0 && !draft ? (
         <View style={styles.emptyCard}>
-          <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>＋</Text></View>
+          <View style={styles.emptyIcon}><UserRoundPlus color={colors.accent} size={22} strokeWidth={2} /></View>
           <View style={styles.emptyCopy}>
             <Text style={styles.emptyTitle}>Aún no agregas a nadie</Text>
             <Text style={styles.emptyText}>Registra a tu familiar para personalizar su cuidado.</Text>
@@ -526,7 +528,8 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
               <Text style={styles.sectionHint}>{draft.medications.length ? `${draft.medications.length} registrado(s)` : 'Opcional'}</Text>
             </View>
             <Pressable accessibilityRole="button" onPress={() => setMedModal({ id: createId(), name: '', dosage: '', schedule: '' })} style={styles.addMedicationButton}>
-              <Text style={styles.addMedicationText}>+ Agregar</Text>
+              <Plus color={colors.accent} size={20} strokeWidth={2} />
+              <Text style={styles.addMedicationText}>Agregar</Text>
             </Pressable>
           </View>
           {draft.medications.map((medication) => (
@@ -728,15 +731,14 @@ const styles = StyleSheet.create({
   sectionHeading: { flex: 1, paddingRight: 8 },
   sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: '800', textAlign: 'left' },
   sectionHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3, textAlign: 'left' },
-  addButton: { backgroundColor: colors.ink, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 10 },
+  addButton: { alignItems: 'center', backgroundColor: colors.ink, borderRadius: 12, flexDirection: 'row', gap: 5, paddingHorizontal: 13, paddingVertical: 10 },
   addButtonText: { color: colors.white, fontSize: 11, fontWeight: '800' },
   emptyCard: { alignItems: 'center', backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 16, borderWidth: 1, flexDirection: 'row', padding: 16 },
   emptyIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
-  emptyIconText: { color: colors.tealDark, fontSize: 20, fontWeight: '800' },
   emptyCopy: { flex: 1, marginLeft: 12 },
   emptyTitle: { color: colors.ink, fontSize: 11, fontWeight: '800' },
   emptyText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 4, textAlign: 'left' },
-  profileCard: { alignItems: 'stretch', alignSelf: 'stretch', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginBottom: 10, padding: 15, shadowColor: '#18383B', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8 },
+  profileCard: { alignItems: 'stretch', alignSelf: 'stretch', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: 10, padding: 15, shadowColor: '#070707', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8 },
   profileHeader: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   profileIdentity: { flex: 1, paddingRight: 8 },
   profileName: { color: colors.ink, fontSize: 13, fontWeight: '800', textAlign: 'left' },
@@ -752,7 +754,7 @@ const styles = StyleSheet.create({
   medicationDescription: { color: colors.muted, fontSize: 9, marginTop: 3, textAlign: 'left' },
   noMedication: { color: colors.muted, fontSize: 9, marginTop: 5, textAlign: 'left' },
   removeLink: { alignSelf: 'flex-start', marginTop: 12, paddingVertical: 4 },
-  removeLinkText: { color: '#B64B47', fontSize: 10, fontWeight: '700' },
+  removeLinkText: { color: colors.accent, fontSize: 10, fontWeight: '700' },
   modalBackdrop: { alignItems: 'center', backgroundColor: 'rgba(17,39,41,0.5)', flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 24 },
   modalCard: { backgroundColor: colors.canvas, borderRadius: 24, maxHeight: '90%', maxWidth: 520, width: '100%' },
   modalContent: { padding: 20, paddingBottom: 24 },
@@ -763,7 +765,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 11, minHeight: 40, paddingHorizontal: 10, paddingVertical: 9, textAlign: 'left' },
   multilineInput: { minHeight: 58, textAlignVertical: 'top' },
   medicationFormHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 9, marginTop: 2 },
-  addMedicationButton: { borderColor: colors.line, borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
+  addMedicationButton: { alignItems: 'center', borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: 'row', gap: 4, paddingHorizontal: 9, paddingVertical: 6 },
   addMedicationText: { color: colors.tealDark, fontSize: 10, fontWeight: '700' },
   medicationForm: { backgroundColor: colors.white, borderRadius: 10, marginBottom: 9, padding: 10 },
   medicationSummaryRow: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 10, flexDirection: 'row', gap: 8, marginBottom: 8, padding: 10 },
@@ -775,7 +777,7 @@ const styles = StyleSheet.create({
   suggestionItem: { borderBottomColor: colors.line, borderBottomWidth: 1, padding: 10 },
   suggestionText: { color: colors.ink, fontSize: 10, lineHeight: 14 },
   mapPreview: { borderRadius: 12, height: 180, marginBottom: 10, overflow: 'hidden' },
-  error: { color: '#B64B47', fontSize: 10, lineHeight: 15, marginBottom: 8, textAlign: 'left' },
+  error: { color: colors.accent, fontSize: 10, lineHeight: 15, marginBottom: 8, textAlign: 'left' },
   saveButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 10, marginTop: 4, paddingVertical: 11 },
   saveButtonDisabled: { opacity: 0.7 },
   saveButtonText: { color: colors.white, fontSize: 11, fontWeight: '800' },

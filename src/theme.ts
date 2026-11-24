@@ -1,13 +1,21 @@
 export const colors = {
-  ink: '#18383B',
-  muted: '#77878A',
-  teal: '#50BFC4',
-  tealDark: '#187F82',
-  tealPale: '#E7F4F1',
-  canvas: '#F5F8F6',
+  ink: '#070707',
+  muted: '#6F6F73',
+  teal: '#DA563A',
+  tealDark: '#DA563A',
+  tealPale: '#FDEBE6',
+  canvas: '#F5F5F7',
   white: '#FFFFFF',
-  line: '#E4EEEE',
-  green: '#3AAE83',
-  gold: '#E9B84C',
-  map: '#EAF0EA',
+  line: '#E7E7EB',
+  green: '#DA563A',
+  gold: '#FDD36B',
+  map: '#E8ECEB',
+  soft: '#F8F8F8',
+  highlightSoft: '#FFF7DE',
+};
+
+export const secondaryColors = {
+  ...colors,
+  accent: colors.tealDark,
+  highlight: colors.gold,
 };

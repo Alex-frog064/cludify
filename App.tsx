@@ -4,6 +4,7 @@ import { Alert, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { ClientProfileScreen } from './src/screens/ClientProfileScreen';
 import { CaregiverProfileScreen } from './src/screens/CaregiverProfileScreen';
 import { ExploreScreen } from './src/screens/ExploreScreen';
@@ -46,6 +47,7 @@ export default function App() {
   const [activeConsultaId, setActiveConsultaId] = useState<number | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  const [hasStarted, setHasStarted] = useState(false);
   const [signedInUser, setSignedInUser] = useState<UserAccount | null>(null);
   const [caregiverSetup, setCaregiverSetup] = useState<UserAccount | null>(null);
   const [availabilityActivatedAt, setAvailabilityActivatedAt] = useState<number | null>(null);
@@ -141,9 +143,13 @@ export default function App() {
     return () => clearTimeout(timeout);
   }, [reporterAvailable, availabilityActivatedAt, reporterApiId, reporterToken]);
 
-  const openAuth = (mode: AuthMode) => setAuthMode(mode);
+  const openAuth = (mode: AuthMode) => {
+    setHasStarted(true);
+    setAuthMode(mode);
+  };
 
   const handleAuthComplete = (user: UserAccount) => {
+    setHasStarted(true);
     setAuthMode(null);
     if (user.role === 'caregiver') {
       if (user.caregiverProfile) {
@@ -157,6 +163,22 @@ export default function App() {
     }
     setSignedInUser(user);
     setActiveTab('account');
+  };
+
+  const handleSignOut = () => {
+    setSignedInUser(null);
+    setCaregiverSetup(null);
+    setAvailabilityActivatedAt(null);
+    setAuthMode(null);
+    setHasStarted(false);
+    setActiveTab('explore');
+    setSelectedCaregiver(null);
+    setSelectedPatient(null);
+    setServiceRequestCaregiver(null);
+    setEditingServicio(null);
+    setServicioRefreshKey(0);
+    setActiveConsultaId(null);
+    setChatLoading(false);
   };
 
   const handleRequestCare = () => {
@@ -335,6 +357,17 @@ export default function App() {
     );
   }
 
+  if (!hasStarted) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
+          <StatusBar style="dark" />
+          <WelcomeScreen onBegin={() => setAuthMode('login')} />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
   if (selectedPatient) {
     return (
       <SafeAreaProvider>
@@ -448,10 +481,7 @@ export default function App() {
               });
             }}
             onUpdateUser={setSignedInUser}
-            onSignOut={() => {
-              setSignedInUser(null);
-              setActiveTab('explore');
-            }}
+            onSignOut={handleSignOut}
           />
         ) : activeTab === 'explore' ? (
           <ExploreScreen onSelectCaregiver={setSelectedCaregiver} token={signedInUser?.token} />
@@ -466,10 +496,8 @@ export default function App() {
             activeConsultaId={activeConsultaId}
             onActiveConsultaChange={setActiveConsultaId}
             onOpenAuth={openAuth}
-            onSignOut={() => {
-              setSignedInUser(null);
-              setActiveTab('explore');
-            }}
+            onSignOut={handleSignOut}
+            onUpdateUser={setSignedInUser}
             onSaveCareRecipient={(recipient) => {
               setSignedInUser((current) => {
                 if (!current || current.role !== 'family') return current;

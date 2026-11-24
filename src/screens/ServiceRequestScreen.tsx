@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   summaryLabel: { color: colors.muted, fontSize: 11 },
   summaryValue: { color: colors.ink, fontSize: 11, fontWeight: '700' },
   summaryTotal: { color: colors.tealDark, fontSize: 14, fontWeight: '800' },
-  error: { color: '#B23B3B', fontSize: 11, lineHeight: 16, marginTop: 14 },
+  error: { color: colors.tealDark, fontSize: 11, lineHeight: 16, marginTop: 14 },
   bottom: { backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10 },
   submitButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 14, justifyContent: 'center', paddingVertical: 14 },
   submitButtonDisabled: { opacity: 0.5 },

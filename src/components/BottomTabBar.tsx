@@ -1,27 +1,35 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme';
+import { useEffect, useState } from 'react';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { House, MessageCircle, Search, UserRound } from 'lucide-react-native';
+import { secondaryColors as colors } from '../theme';
 import { AccountRole } from '../types';
 
 export type FamilyTabKey = 'care' | 'messages' | 'account';
 export type CaregiverTabKey = 'notifications' | 'messages' | 'clients' | 'profile';
 export type TabKey = 'explore' | FamilyTabKey | CaregiverTabKey;
 
-type IconName = keyof typeof Ionicons.glyphMap;
+type TabIcon = typeof House;
 
-const familyTabs: { key: TabKey; label: string; icon: IconName }[] = [
-  { key: 'explore', label: 'Explorar', icon: 'search-outline' },
-  { key: 'care', label: 'Mis cuidados', icon: 'calendar-outline' },
-  { key: 'messages', label: 'Mensajes', icon: 'chatbubble-ellipses-outline' },
-  { key: 'account', label: 'Mi cuenta', icon: 'person-outline' },
+const familyTabs: { key: TabKey; label: string; icon: TabIcon }[] = [
+  { key: 'explore', label: 'Inicio', icon: House },
+  { key: 'care', label: 'Buscar', icon: Search },
+  { key: 'messages', label: 'Mensajes', icon: MessageCircle },
+  { key: 'account', label: 'Perfil', icon: UserRound },
 ];
 
-const caregiverTabs: { key: TabKey; label: string; icon: IconName }[] = [
-  { key: 'notifications', label: 'Avisos', icon: 'notifications-outline' },
-  { key: 'messages', label: 'Mensajes', icon: 'chatbubble-ellipses-outline' },
-  { key: 'clients', label: 'Servicios', icon: 'briefcase-outline' },
-  { key: 'profile', label: 'Perfil', icon: 'person-outline' },
+const caregiverTabs: { key: TabKey; label: string; icon: TabIcon }[] = [
+  { key: 'notifications', label: 'Inicio', icon: House },
+  { key: 'clients', label: 'Buscar', icon: Search },
+  { key: 'messages', label: 'Mensajes', icon: MessageCircle },
+  { key: 'profile', label: 'Perfil', icon: UserRound },
 ];
+
+const activeWidths: Record<string, number> = {
+  Inicio: 88,
+  Buscar: 91,
+  Mensajes: 105,
+  Perfil: 83,
+};
 
 type Props = {
   role?: AccountRole;
@@ -36,37 +44,81 @@ export function BottomTabBar({ role = 'family', activeTab, onSelectTab }: Props)
       {tabs.map((tab) => {
         const selected = activeTab === tab.key;
         return (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
+          <TabButton
             key={tab.key}
             onPress={() => onSelectTab(tab.key)}
-            style={styles.tab}
-          >
-            <View style={[styles.iconWrap, selected && styles.selectedIconWrap]}>
-              <Ionicons color={selected ? colors.tealDark : '#91A3A6'} name={tab.icon} size={20} />
-            </View>
-            <Text style={[styles.label, selected && styles.selectedLabel]}>{tab.label}</Text>
-          </Pressable>
+            selected={selected}
+            tab={{ ...tab, activeWidth: activeWidths[tab.label] }}
+          />
         );
       })}
     </View>
   );
 }
 
+type Tab = { key: TabKey; label: string; icon: TabIcon; activeWidth: number };
+
+function TabButton({ onPress, selected, tab }: { onPress: () => void; selected: boolean; tab: Tab }) {
+  const [width] = useState(() => new Animated.Value(selected ? tab.activeWidth : 48));
+  const [labelOpacity] = useState(() => new Animated.Value(selected ? 1 : 0));
+  const Icon = tab.icon;
+
+  useEffect(() => {
+    const animation = Animated.parallel([
+      Animated.spring(width, {
+        toValue: selected ? tab.activeWidth : 48,
+        damping: 19,
+        stiffness: 210,
+        mass: 0.9,
+        useNativeDriver: false,
+      }),
+      Animated.timing(labelOpacity, {
+        toValue: selected ? 1 : 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [labelOpacity, selected, tab.activeWidth, width]);
+
+  return (
+    <Animated.View style={[styles.tabShell, { width }, selected && styles.activeTabShell]}>
+      <Pressable
+        accessibilityLabel={tab.label}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        onPress={onPress}
+        style={styles.tab}
+      >
+        <Icon color={selected ? colors.white : colors.ink} size={21} strokeWidth={2} />
+        {selected && (
+          <Animated.Text numberOfLines={1} style={[styles.label, { opacity: labelOpacity }]}>
+            {tab.label}
+          </Animated.Text>
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   bar: {
     backgroundColor: colors.white,
-    borderTopColor: colors.line,
-    borderTopWidth: 1,
+    borderRadius: 32,
+    elevation: 8,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingBottom: 6,
-    paddingTop: 7,
+    marginBottom: 8,
+    marginHorizontal: 12,
+    padding: 8,
+    shadowColor: colors.ink,
+    shadowOffset: { height: 5, width: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
   },
-  tab: { alignItems: 'center', flex: 1 },
-  iconWrap: { alignItems: 'center', borderRadius: 13, height: 28, justifyContent: 'center', width: 42 },
-  selectedIconWrap: { backgroundColor: colors.tealPale },
-  label: { color: '#87979A', fontSize: 9, marginTop: 3 },
-  selectedLabel: { color: colors.tealDark, fontWeight: '700' },
+  tabShell: { alignItems: 'center', borderRadius: 25, height: 48, justifyContent: 'center' },
+  activeTabShell: { backgroundColor: colors.accent },
+  tab: { alignItems: 'center', flexDirection: 'row', height: '100%', justifyContent: 'center', width: '100%' },
+  label: { color: colors.white, fontSize: 11, fontWeight: '700', marginLeft: 6 },
 });

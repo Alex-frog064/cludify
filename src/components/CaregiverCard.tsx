@@ -1,7 +1,7 @@
-﻿import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Caregiver } from '../types';
-import { colors } from '../theme';
+import { secondaryColors as colors } from '../theme';
 
 type Props = {
   caregiver: Caregiver;
@@ -46,13 +46,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.white,
     borderColor: colors.line,
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: 1,
     elevation: 2,
     flexDirection: 'row',
     marginBottom: 9,
     padding: 12,
-    shadowColor: '#173A3E',
+    shadowColor: '#070707',
     shadowOffset: { height: 3, width: 0 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -63,12 +63,12 @@ const styles = StyleSheet.create({
   nameLine: { alignItems: 'center', flexDirection: 'row', gap: 5 },
   name: { color: colors.ink, flexShrink: 1, fontSize: 13, fontWeight: '800' },
   details: { color: colors.muted, fontSize: 10, marginTop: 5 },
-  rating: { color: '#A87519', fontWeight: '700' },
+  rating: { color: colors.ink, fontWeight: '700' },
   availabilityRow: { alignItems: 'center', flexDirection: 'row', marginTop: 7 },
   availableDot: { backgroundColor: colors.green, borderRadius: 3, height: 6, marginRight: 5, width: 6 },
   busyDot: { backgroundColor: colors.gold },
   availability: { color: colors.green, flexShrink: 1, fontSize: 9, fontWeight: '600' },
-  busyAvailability: { color: colors.gold },
+  busyAvailability: { color: colors.ink },
   priceBlock: { alignItems: 'flex-end', marginLeft: 6, minWidth: 58 },
   price: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   priceUnit: { color: colors.muted, fontSize: 8, marginTop: 2 },

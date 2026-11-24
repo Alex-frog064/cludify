@@ -9,7 +9,7 @@ import {
   getMensajesConsulta,
   marcarMensajesLeidos,
 } from '../api/auth';
-import { colors } from '../theme';
+import { secondaryColors as colors } from '../theme';
 import type { ConsultaCuidador, MensajeConsulta } from '../types';
 
 type Props = {
@@ -408,7 +408,7 @@ export function ConsultasChat({
               multiline
               onChangeText={setDraft}
               placeholder="Escribe tu mensaje..."
-              placeholderTextColor="#91A0A3"
+              placeholderTextColor={colors.muted}
               style={styles.composerInput}
               value={draft}
             />
@@ -436,7 +436,7 @@ export function ConsultasChat({
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   header: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18 },
-  page: { paddingBottom: 28, paddingHorizontal: 18, paddingTop: 20 },
+  page: { paddingBottom: 36, paddingHorizontal: 18, paddingTop: 20 },
   pageTitle: { color: colors.ink, fontSize: 26, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 12, marginTop: 6 },
   loadingWrap: { alignItems: 'center', flex: 1, justifyContent: 'center' },
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
   },
   emptyIconWrap: {
     alignItems: 'center',
-    backgroundColor: '#E8F4F2',
+    backgroundColor: colors.tealPale,
     borderRadius: 28,
     height: 56,
     justifyContent: 'center',
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   listSubtitle: { color: colors.muted, fontSize: 11, marginTop: 4 },
   countBadge: {
     alignItems: 'center',
-    backgroundColor: '#E7F2F0',
+    backgroundColor: colors.highlightSoft,
     borderRadius: 16,
     height: 32,
     justifyContent: 'center',
@@ -488,15 +488,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   countBadgeText: { color: colors.tealDark, fontSize: 12, fontWeight: '800' },
-  pendingBanner: { backgroundColor: '#FFF5DB', borderRadius: 14, marginHorizontal: 16, marginTop: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  pendingBannerTitle: { color: '#8A6417', fontSize: 11, fontWeight: '800' },
-  pendingBannerText: { color: '#A77A20', fontSize: 9, marginTop: 3 },
-  conversationList: { paddingHorizontal: 16, paddingBottom: 24 },
+  pendingBanner: { backgroundColor: colors.highlightSoft, borderRadius: 18, marginHorizontal: 16, marginTop: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  pendingBannerTitle: { color: colors.ink, fontSize: 11, fontWeight: '800' },
+  pendingBannerText: { color: colors.ink, fontSize: 9, marginTop: 3 },
+  conversationList: { paddingHorizontal: 16, paddingBottom: 32 },
   conversationCard: {
     alignItems: 'center',
     backgroundColor: colors.white,
-    borderColor: '#E8EFED',
-    borderRadius: 18,
+    borderColor: colors.line,
+    borderRadius: 20,
     borderWidth: 1,
     flexDirection: 'row',
     marginBottom: 10,
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
   },
   contactAvatar: {
     alignItems: 'center',
-    backgroundColor: '#E4F1EF',
+    backgroundColor: colors.tealPale,
     borderRadius: 24,
     height: 48,
     justifyContent: 'center',
@@ -520,17 +520,17 @@ const styles = StyleSheet.create({
   conversationSubtitle: { color: colors.muted, fontSize: 10, marginTop: 3 },
   conversationBottomLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   conversationPreview: { color: colors.muted, flex: 1, fontSize: 10, marginRight: 8 },
-  pendingPreview: { color: '#8A6417', fontWeight: '700' },
-  conversationArrow: { color: '#A1B2B0', fontSize: 27, marginLeft: 4 },
+  pendingPreview: { color: colors.ink, fontWeight: '700' },
+  conversationArrow: { color: colors.muted, fontSize: 27, marginLeft: 4 },
   readOnlyNotice: {
-    backgroundColor: '#FFF4D9',
+    backgroundColor: colors.highlightSoft,
     borderRadius: 12,
     marginHorizontal: 18,
     marginTop: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  readOnlyText: { color: '#8A6516', fontSize: 10, textAlign: 'center' },
+  readOnlyText: { color: colors.ink, fontSize: 10, textAlign: 'center' },
   threadTopBar: {
     alignItems: 'center',
     backgroundColor: colors.white,
@@ -564,9 +564,9 @@ const styles = StyleSheet.create({
     minWidth: 20,
     paddingHorizontal: 5,
   },
-  unreadBadgeText: { color: colors.white, fontSize: 9, fontWeight: '800' },
-  pendingBadge: { alignItems: 'center', backgroundColor: '#8A6417', borderRadius: 10, height: 20, justifyContent: 'center', minWidth: 20, paddingHorizontal: 5 },
-  pendingBadgeText: { color: colors.white, fontSize: 9, fontWeight: '800' },
+  unreadBadgeText: { color: colors.ink, fontSize: 9, fontWeight: '800' },
+  pendingBadge: { alignItems: 'center', backgroundColor: colors.highlight, borderRadius: 10, height: 20, justifyContent: 'center', minWidth: 20, paddingHorizontal: 5 },
+  pendingBadgeText: { color: colors.ink, fontSize: 9, fontWeight: '800' },
   threadScroll: { flex: 1 },
   thread: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 },
   messageRow: { alignItems: 'flex-start', flexDirection: 'row' },
@@ -636,9 +636,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   error: {
-    backgroundColor: '#FCE9E8',
+    backgroundColor: colors.tealPale,
     borderRadius: 10,
-    color: '#B13C3C',
+    color: colors.accent,
     fontSize: 11,
     marginHorizontal: 16,
     marginVertical: 8,

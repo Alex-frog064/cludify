@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ChevronRight, UsersRound } from 'lucide-react-native';
 import { deleteServicio, deleteUsuario, getAbuelos, getServicios } from '../api/auth';
 import { CaregiverCard } from '../components/CaregiverCard';
 import { ClientProfileSection } from '../components/ClientProfileSection';
 import { ConsultasChat } from '../components/ConsultasChat';
+import { EditableProfileAvatar } from '../components/EditableProfileAvatar';
 import { FamilyTabKey, TabKey } from '../components/BottomTabBar';
-import { colors } from '../theme';
+import { secondaryColors as colors } from '../theme';
 import { CareRecipient, Caregiver, Coordinates, Servicio, UserAccount } from '../types';
 import { getCurrentCoordinates } from '../utils/currentServiceLocation';
 import { mapServicio, matchesServicioFilter, matchesServicioSearch, servicioFilters, ServicioFilter } from '../utils/servicio';
@@ -19,6 +21,7 @@ type Props = {
   onSelectTab: (tab: TabKey) => void;
   onOpenAuth: (mode: 'login' | 'signup') => void;
   onSignOut: () => void;
+  onUpdateUser: Dispatch<SetStateAction<UserAccount | null>>;
   onSaveCareRecipient: (recipient: CareRecipient) => void | Promise<void>;
   onDeleteCareRecipient: (recipientId: string) => void | Promise<void>;
   onSelectCaregiver: (caregiver: Caregiver) => void;
@@ -52,6 +55,7 @@ export function SimpleTabScreen({
   onSelectTab,
   onOpenAuth,
   onSignOut,
+  onUpdateUser,
   onSaveCareRecipient,
   onDeleteCareRecipient,
   onSelectCaregiver,
@@ -188,7 +192,12 @@ export function SimpleTabScreen({
         signedInUser ? (
           signedInUser.role === 'family' ? (
             <View style={styles.familyProfile}>
-              <FamilyProfileHero user={signedInUser} recipientCount={signedInUser.careRecipients?.length ?? 0} />
+              <FamilyProfileHero
+                user={signedInUser}
+                recipientCount={signedInUser.careRecipients?.length ?? 0}
+                onPhotoChange={(uri) => onUpdateUser((current) =>
+                  current && current.email === signedInUser.email ? { ...current, profilePhotoUri: uri } : current)}
+              />
               <View style={styles.familyRecipients}>
                 <ClientProfileSection
                   profiles={signedInUser.careRecipients ?? []}
@@ -201,24 +210,24 @@ export function SimpleTabScreen({
               <View style={styles.familyActions}>
                 <Pressable accessibilityRole="button" onPress={() => void deleteAccount()} style={styles.familyAction}>
                   <Text style={styles.familyActionDanger}>Eliminar cuenta</Text>
-                  <Text style={styles.familyActionArrow}>›</Text>
+                  <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.familyAction}>
                   <Text style={styles.familyActionText}>Cerrar sesión</Text>
-                  <Text style={styles.familyActionArrow}>›</Text>
+                  <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
                 </Pressable>
               </View>
             </View>
           ) : (
             <View style={styles.accountCard}>
               <View style={styles.profileHero}>
-                {signedInUser.profilePhotoUri ? (
-                  <Image source={{ uri: signedInUser.profilePhotoUri }} style={styles.heroAvatar} />
-                ) : (
-                  <View style={styles.heroAvatar}>
-                    <Text style={styles.avatarText}>{signedInUser.name.charAt(0).toUpperCase()}</Text>
-                  </View>
-                )}
+                <EditableProfileAvatar
+                  uri={signedInUser.profilePhotoUri}
+                  name={signedInUser.name}
+                  size={64}
+                  onChange={(uri) => onUpdateUser((current) =>
+                    current && current.email === signedInUser.email ? { ...current, profilePhotoUri: uri } : current)}
+                />
                 <View style={styles.profileIdentity}>
                   <Text style={styles.profileEyebrow}>PERFIL</Text>
                   <Text style={styles.welcome}>{signedInUser.name}</Text>
@@ -280,7 +289,7 @@ export function SimpleTabScreen({
           <TextInput
             onChangeText={setServicioSearch}
             placeholder="Buscar por paciente, cuidador, nota o ID"
-            placeholderTextColor="#91A0A3"
+            placeholderTextColor={colors.muted}
             style={styles.serviceSearch}
             value={servicioSearch}
           />
@@ -349,20 +358,24 @@ export function SimpleTabScreen({
   );
 }
 
-function FamilyProfileHero({ user, recipientCount }: { user: UserAccount; recipientCount: number }) {
+function FamilyProfileHero({
+  user,
+  recipientCount,
+  onPhotoChange,
+}: {
+  user: UserAccount;
+  recipientCount: number;
+  onPhotoChange: (uri: string) => void;
+}) {
   return (
     <View style={styles.familyHero}>
-      <View style={styles.familyTopLine}>
-        <View style={styles.familyTopBadge}><Text style={styles.familyTopBadgeText}>♡</Text></View>
-      </View>
       <View style={styles.familyPortrait}>
-        <View style={styles.familyPortraitRing}>
-          {user.profilePhotoUri ? (
-            <Image source={{ uri: user.profilePhotoUri }} style={styles.familyPortraitImage} />
-          ) : (
-            <Text style={styles.familyPortraitInitial}>{user.name.charAt(0).toUpperCase()}</Text>
-          )}
-        </View>
+        <EditableProfileAvatar
+          uri={user.profilePhotoUri}
+          name={user.name}
+          size={108}
+          onChange={onPhotoChange}
+        />
       </View>
       <View style={styles.familySummaryCard}>
         <View style={styles.familyNameLine}>
@@ -384,7 +397,7 @@ function FamilyProfileHero({ user, recipientCount }: { user: UserAccount; recipi
           <FamilyStat value={user.id ? 'Activa' : 'Demo'} label="Cuenta" />
         </View>
         <View style={styles.familyCareHint}>
-          <Text style={styles.familyCareHintIcon}>♡</Text>
+          <UsersRound color={colors.white} size={21} strokeWidth={2} style={styles.familyCareHintIcon} />
           <View style={styles.familyCareHintCopy}>
             <Text style={styles.familyCareHintTitle}>Cuidado familiar</Text>
             <Text style={styles.familyCareHintText}>Administra aquí los datos de las personas que acompañas.</Text>
@@ -405,46 +418,38 @@ function FamilyStat({ value, label }: { value: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: colors.canvas, flexGrow: 1, paddingHorizontal: 19, paddingTop: 30, paddingBottom: 26 },
-  familyScreen: { backgroundColor: '#F0F1F7', flexGrow: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 30 },
+  screen: { backgroundColor: colors.canvas, flexGrow: 1, paddingHorizontal: 19, paddingTop: 30, paddingBottom: 46 },
+  familyScreen: { backgroundColor: colors.canvas, flexGrow: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 52 },
   familyProfile: { flex: 1 },
-  familyHero: { backgroundColor: '#ECEEF6', borderRadius: 25, marginHorizontal: -16, marginTop: -12, paddingHorizontal: 16, paddingTop: 13 },
-  familyTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'flex-end' },
-  familyTopBadge: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 22, height: 42, justifyContent: 'center', width: 42 },
-  familyTopBadgeText: { color: colors.tealDark, fontSize: 22, fontWeight: '700' },
-  familyPortrait: { alignItems: 'center', marginTop: 8, zIndex: 1 },
-  familyPortraitRing: { alignItems: 'center', backgroundColor: colors.white, borderColor: '#CDE7E8', borderRadius: 54, borderWidth: 4, height: 108, justifyContent: 'center', overflow: 'hidden', width: 108 },
-  familyPortraitImage: { height: 100, width: 100 },
-  familyPortraitInitial: { color: colors.tealDark, fontSize: 40, fontWeight: '800' },
-  familySummaryCard: { backgroundColor: colors.white, borderColor: '#E8E8EF', borderRadius: 24, borderWidth: 1, marginBottom: 17, marginTop: -38, paddingHorizontal: 17, paddingTop: 51, paddingBottom: 16, shadowColor: '#24283D', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.07, shadowRadius: 16, elevation: 3 },
+  familyHero: { backgroundColor: colors.highlightSoft, borderRadius: 25, marginHorizontal: -16, marginTop: -12, paddingHorizontal: 16, paddingTop: 16 },
+  familyPortrait: { alignItems: 'center', marginTop: 4, zIndex: 1 },
+  familySummaryCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 24, borderWidth: 1, marginBottom: 17, marginTop: -38, paddingHorizontal: 17, paddingTop: 51, paddingBottom: 16, shadowColor: '#070707', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.07, shadowRadius: 16, elevation: 3 },
   familyNameLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   familyNameCopy: { flex: 1, paddingRight: 8 },
   familyEyebrow: { color: colors.tealDark, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
-  familyDisplayName: { color: '#252631', fontSize: 17, fontWeight: '800', marginTop: 3 },
+  familyDisplayName: { color: colors.ink, fontSize: 17, fontWeight: '800', marginTop: 3 },
   familyDisplaySubtitle: { color: colors.muted, fontSize: 10, marginTop: 3 },
-  familyRoleBadge: { backgroundColor: '#292A34', borderRadius: 15, paddingHorizontal: 11, paddingVertical: 7 },
+  familyRoleBadge: { backgroundColor: colors.ink, borderRadius: 15, paddingHorizontal: 11, paddingVertical: 7 },
   familyRoleBadgeText: { color: colors.white, fontSize: 9, fontWeight: '800' },
-  familyStats: { alignItems: 'center', backgroundColor: '#F7F7FA', borderRadius: 17, flexDirection: 'row', justifyContent: 'space-around', marginTop: 16, paddingVertical: 12 },
+  familyStats: { alignItems: 'center', backgroundColor: colors.soft, borderRadius: 17, flexDirection: 'row', justifyContent: 'space-around', marginTop: 16, paddingVertical: 12 },
   familyStat: { alignItems: 'center', flex: 1 },
-  familyStatValue: { color: '#292A34', fontSize: 16, fontWeight: '800' },
+  familyStatValue: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   familyStatLabel: { color: colors.muted, fontSize: 8, marginTop: 4, textAlign: 'center' },
-  familyStatDivider: { backgroundColor: '#E3E4EA', height: 30, width: 1 },
-  familyCareHint: { alignItems: 'center', backgroundColor: '#292A34', borderRadius: 15, flexDirection: 'row', marginTop: 13, paddingHorizontal: 12, paddingVertical: 10 },
-  familyCareHintIcon: { color: colors.white, fontSize: 21, marginRight: 9 },
+  familyStatDivider: { backgroundColor: colors.line, height: 30, width: 1 },
+  familyCareHint: { alignItems: 'center', backgroundColor: colors.ink, borderRadius: 15, flexDirection: 'row', marginTop: 13, paddingHorizontal: 12, paddingVertical: 10 },
+  familyCareHintIcon: { marginRight: 9 },
   familyCareHintCopy: { flex: 1 },
   familyCareHintTitle: { color: colors.white, fontSize: 10, fontWeight: '800' },
-  familyCareHintText: { color: '#D5D5DC', fontSize: 9, lineHeight: 13, marginTop: 3 },
+  familyCareHintText: { color: '#D8D8DB', fontSize: 9, lineHeight: 13, marginTop: 3 },
   familyRecipients: { alignSelf: 'stretch' },
-  familyActions: { backgroundColor: colors.white, borderColor: '#E8E8EF', borderRadius: 20, borderWidth: 1, marginTop: 14, paddingHorizontal: 15 },
+  familyActions: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginTop: 14, paddingHorizontal: 15 },
   familyAction: { alignItems: 'center', borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 48 },
   familyActionText: { color: colors.ink, fontSize: 10, fontWeight: '700' },
-  familyActionDanger: { color: '#B64B47', fontSize: 10, fontWeight: '700' },
-  familyActionArrow: { color: '#7C818D', fontSize: 24 },
+  familyActionDanger: { color: colors.accent, fontSize: 10, fontWeight: '700' },
   title: { color: colors.ink, fontSize: 25, fontWeight: '800', marginTop: 6 },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
   accountCard: { alignItems: 'stretch', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 22, borderWidth: 1, marginTop: 25, overflow: 'hidden', padding: 18 },
   profileHero: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 18, flexDirection: 'row', padding: 16 },
-  heroAvatar: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 32, height: 64, justifyContent: 'center', width: 64 },
   profileIdentity: { flex: 1, marginLeft: 13 },
   profileEyebrow: { color: colors.tealDark, fontSize: 9, fontWeight: '800', letterSpacing: 1.1 },
   avatar: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 31, height: 62, justifyContent: 'center', width: 62 },
@@ -470,18 +475,18 @@ const styles = StyleSheet.create({
   serviceFilterChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   serviceFilterText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
   serviceFilterTextActive: { color: colors.white },
-  serviceCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 14, borderWidth: 1, marginBottom: 9, padding: 12 },
+  serviceCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: 9, padding: 14 },
   serviceTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   serviceTitle: { color: colors.ink, flex: 1, fontSize: 12, fontWeight: '800' },
-  serviceStatus: { backgroundColor: colors.tealPale, borderRadius: 9, color: colors.tealDark, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
+  serviceStatus: { backgroundColor: colors.highlightSoft, borderRadius: 9, color: colors.ink, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
   serviceInfo: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 5 },
   serviceNote: { color: colors.ink, fontSize: 10, lineHeight: 14, marginTop: 7 },
   serviceMeta: { color: colors.tealDark, fontSize: 9, lineHeight: 13, marginTop: 7 },
   serviceActions: { flexDirection: 'row', gap: 8, marginTop: 9 },
   serviceAction: { backgroundColor: colors.tealPale, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7 },
   serviceActionText: { color: colors.tealDark, fontSize: 9, fontWeight: '800' },
-  serviceActionDanger: { backgroundColor: '#FDECEC' },
-  serviceActionDangerText: { color: '#B23B3B', fontSize: 9, fontWeight: '800' },
+  serviceActionDanger: { backgroundColor: colors.tealPale },
+  serviceActionDangerText: { color: colors.accent, fontSize: 9, fontWeight: '800' },
   suggestionInfo: { color: colors.muted, fontSize: 11, lineHeight: 16, marginBottom: 10 },
-  suggestionError: { color: '#B3261E', fontSize: 11, lineHeight: 16, marginBottom: 10 },
+  suggestionError: { color: colors.accent, fontSize: 11, lineHeight: 16, marginBottom: 10 },
 });

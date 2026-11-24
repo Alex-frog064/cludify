@@ -56,6 +56,11 @@ export type CaregiverRegistration = {
   verificado?: boolean;
 };
 
+export type CaregiverSetupDraft = Pick<
+  CaregiverRegistration,
+  'identificationNumber' | 'rfc' | 'professionalTitle' | 'serviceLocation' | 'serviceCoordinates'
+>;
+
 export type Medication = {
   id: string;
   apiId?: number;
@@ -131,6 +136,7 @@ export type UserAccount = {
   role: AccountRole;
   profilePhotoUri?: string;
   caregiverProfile?: CaregiverRegistration;
+  caregiverSetupDraft?: CaregiverSetupDraft;
   careRecipients?: CareRecipient[];
 };
 

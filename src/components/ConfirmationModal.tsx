@@ -63,19 +63,19 @@ export function ConfirmationModal({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { alignItems: 'center', backgroundColor: 'rgba(17, 39, 41, 0.56)', flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  backdrop: { alignItems: 'center', backgroundColor: 'rgba(7, 7, 7, 0.56)', flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   card: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 24, maxWidth: 420, padding: 26, width: '100%' },
   icon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 30, height: 60, justifyContent: 'center', width: 60 },
   iconText: { color: colors.tealDark, fontSize: 26, fontWeight: '800' },
-  destructiveIcon: { backgroundColor: '#FCECEB' },
-  destructiveIconText: { color: '#B64B47' },
+  destructiveIcon: { backgroundColor: colors.tealPale },
+  destructiveIconText: { color: colors.tealDark },
   title: { color: colors.ink, fontSize: 19, fontWeight: '800', marginTop: 16, textAlign: 'center' },
   message: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 9, textAlign: 'center' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 24, width: '100%' },
   cancelButton: { alignItems: 'center', backgroundColor: colors.canvas, borderRadius: 13, flex: 1, justifyContent: 'center', minHeight: 48, paddingHorizontal: 10 },
   cancelText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
   confirmButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 13, flex: 1, justifyContent: 'center', minHeight: 48, paddingHorizontal: 10 },
-  destructiveButton: { backgroundColor: '#B64B47' },
+  destructiveButton: { backgroundColor: colors.tealDark },
   disabledButton: { opacity: 0.65 },
   confirmText: { color: colors.white, fontSize: 12, fontWeight: '800' },
 });
