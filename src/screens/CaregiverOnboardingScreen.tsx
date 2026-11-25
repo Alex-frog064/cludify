@@ -420,7 +420,7 @@ function Field({
         multiline={multiline}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={colors.line}
         style={[styles.input, multiline && styles.multilineInput]}
         value={value}
       />
@@ -433,23 +433,23 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', backgroundColor: colors.white, flexDirection: 'row', height: 54, justifyContent: 'center' },
   backButton: { alignItems: 'center', height: 44, justifyContent: 'center', left: 13, position: 'absolute', width: 44 },
   backText: { color: colors.ink, fontSize: 31, lineHeight: 34, marginTop: -4 },
-  headerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  headerTitle: { color: colors.tealDark, fontSize: 14, fontWeight: '800' },
   stepCount: { color: colors.muted, fontSize: 10, position: 'absolute', right: 18 },
   progressTrack: { backgroundColor: colors.line, height: 3 },
   progressFill: { backgroundColor: colors.tealDark, height: 3 },
   content: { paddingHorizontal: 22, paddingTop: 25, paddingBottom: 22 },
   eyebrow: { color: colors.tealDark, fontSize: 10, fontWeight: '800', letterSpacing: 1.1 },
-  title: { color: colors.ink, fontSize: 23, fontWeight: '800', marginTop: 8 },
+  title: { color: colors.tealDark, fontSize: 23, fontWeight: '800', marginTop: 8 },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 21, marginTop: 6 },
   photoPicker: { alignItems: 'center', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 15, borderWidth: 1, flexDirection: 'row', marginBottom: 19, padding: 12 },
   photoPlaceholder: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 29, height: 58, justifyContent: 'center', width: 58 },
   photo: { backgroundColor: colors.tealPale, borderRadius: 29, height: 58, width: 58 },
   photoIcon: { color: colors.tealDark, fontSize: 25, fontWeight: '400' },
   photoCopy: { flex: 1, marginLeft: 12 },
-  photoTitle: { color: colors.ink, fontSize: 12, fontWeight: '700' },
+  photoTitle: { color: colors.tealDark, fontSize: 12, fontWeight: '700' },
   photoArrow: { color: colors.tealDark, fontSize: 24, marginHorizontal: 4 },
   locationButton: { alignSelf: 'flex-start', backgroundColor: colors.tealPale, borderRadius: 10, marginBottom: 13, marginTop: -7, paddingHorizontal: 11, paddingVertical: 9 },
-  locationButtonText: { color: colors.tealDark, fontSize: 10, fontWeight: '700' },
+  locationButtonText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
   field: { marginBottom: 15 },
   label: { color: colors.ink, fontSize: 11, fontWeight: '700', marginBottom: 7 },
   fieldHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginBottom: 8 },

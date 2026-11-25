@@ -12,7 +12,7 @@
     "android": {
       "package": "com.qualify.app",
       "adaptiveIcon": {
-        "backgroundColor": "#F5F5F7",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -31,6 +31,11 @@
           "cameraPermission": "Permite que Qualify tome fotos para tu perfil y verificar tu cuenta."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f50a105e-7d04-4b3c-b35a-e2653a0ca6bf"
+      }
+    }
   }
 }

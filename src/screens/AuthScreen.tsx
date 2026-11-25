@@ -1,8 +1,18 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { ScreenTransition } from '../components/ScreenTransition';
 import { getCuidadores, loginUser, registerUser } from '../api/auth';
-import { colors } from '../theme';
 import { getCurrentServiceLocation } from '../utils/currentServiceLocation';
 import { AccountRole, Coordinates, UserAccount } from '../types';
 
@@ -12,6 +22,15 @@ type ValidatedField = 'name' | 'phone' | 'password' | 'identificationNumber' | '
 const PHONE_MAX_LENGTH = 10;
 const LICENSE_MAX_LENGTH = 8;
 const RFC_MAX_LENGTH = 13;
+const authColors = {
+  primary: '#304A6E',
+  secondary: '#668DC0',
+  ink: '#0F1C30',
+  light: '#C0D0EF',
+  neutral: '#C2C6CE',
+  white: '#FFFFFF',
+  canvas: '#F7F9FC',
+} as const;
 
 type Props = {
   mode: AuthMode;
@@ -281,184 +300,232 @@ export function AuthScreen({ mode, onBack, onChangeMode, onComplete }: Props) {
   };
 
   return (
-    <ScreenTransition>
-      <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <ScreenTransition style={styles.screen}>
+      <View style={styles.screen}>
+        <Image
+          accessible={false}
+          pointerEvents="none"
+          resizeMode="cover"
+          source={require('../IMG/login.png')}
+          style={styles.backgroundImage}
+        />
         <Pressable accessibilityLabel="Volver" accessibilityRole="button" onPress={onBack} style={styles.back}>
           <Text style={styles.backText}>{'‹'}</Text>
         </Pressable>
-        <View style={styles.brandLockup}>
-          <View style={styles.brandMark}><Text style={styles.brandMarkText}>Q</Text></View>
-          <Text style={styles.brand}>Qualify</Text>
-        </View>
-        <Text style={styles.eyebrow}>{isSignup ? 'ÚNETE A QUALIFY' : 'TU ESPACIO DE CONFIANZA'}</Text>
-        <Text style={styles.title}>{isSignup ? 'Crea tu cuenta' : 'Qué gusto verte'}</Text>
-        <Text style={styles.subtitle}>
-          {isSignup
-            ? role === 'caregiver'
-              ? 'Completa tu cuenta y los datos de tu perfil profesional para continuar.'
-              : 'Elige cómo quieres usar Qualify. Podrás completar tu perfil después.'
-            : 'Inicia sesión para continuar con tranquilidad.'}
-        </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+          keyboardVerticalOffset={0}
+          style={styles.keyboardAvoiding}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={styles.scrollView}
+          >
+            <View style={[styles.formPanel, !isSignup && styles.loginFormPanel]}>
+              <View style={styles.brandLockup}>
+                {isSignup && (
+                  <View style={styles.brandMark}><Text style={styles.brandMarkText}>Q</Text></View>
+                )}
+                <Text style={[styles.brand, !isSignup && styles.loginBrand, !isSignup && styles.loginText]}>
+                  Qualify
+                </Text>
+              </View>
+              <Text style={[styles.eyebrow, !isSignup && styles.loginText]}>
+                {isSignup ? 'ÚNETE A QUALIFY' : 'TU ESPACIO DE CONFIANZA'}
+              </Text>
+              <Text style={[styles.title, !isSignup && styles.loginText]}>
+                {isSignup ? 'Crea tu cuenta' : 'Qué gusto verte'}
+              </Text>
+              {isSignup && (
+                <Text style={styles.subtitle}>
+                  {role === 'caregiver'
+                    ? 'Completa tu cuenta y los datos de tu perfil profesional para continuar.'
+                    : 'Elige cómo quieres usar Qualify. Podrás completar tu perfil después.'}
+                </Text>
+              )}
 
-      {isSignup && (
-        <>
-          <Text style={styles.label}>Quiero registrarme como</Text>
-          <View style={styles.roleRow}>
-            <RoleOption
-              active={role === 'family'}
-              description="Busco cuidado para mi familia"
-              icon="F"
-              label="Familia"
-              onPress={() => setRole('family')}
-            />
-            <RoleOption
-              active={role === 'caregiver'}
-              description="Quiero ofrecer mis servicios"
-              icon="C"
-              label="Cuidador"
-              onPress={() => setRole('caregiver')}
-            />
-          </View>
-          <Text style={styles.sectionTitle}>Cuenta</Text>
-          <Input
-            error={nameError}
-            label="Nombre completo"
-            value={name}
-            onChangeText={(value) => updateValidatedField('name', value)}
-            placeholder="Tu nombre"
-          />
-          <Input
-            autoCapitalize="none"
-            keyboardType="email-address"
-            label="Correo electrónico"
-            value={email}
-            onChangeText={(value) => {
-              setEmail(value);
-              setError('');
-            }}
-            placeholder="nombre@correo.com"
-          />
-          <Input
-            error={phoneError}
-            keyboardType="phone-pad"
-            label="Teléfono"
-            value={phone}
-            onChangeText={(value) => updateValidatedField('phone', value)}
-            placeholder="10 dígitos"
-          />
-          <Input
-            error={passwordError}
-            label="Contraseña"
-            value={password}
-            onChangeText={(value) => updateValidatedField('password', value)}
-            placeholder="Mínimo 8 caracteres"
-            secureTextEntry
-          />
-          {isCaregiverSignup && (
-            <>
-              <Text style={styles.sectionTitle}>Perfil Profesional</Text>
-              <Input
-                label="Título profesional"
-                value={professionalTitle}
-                onChangeText={(value) => {
-                  setProfessionalTitle(value);
-                  setError('');
-                }}
-                placeholder="Ej. Cuidadora de personas mayores"
-              />
-              <Input
-                label="Zona donde ofreces cuidados"
-                value={serviceLocation}
-                onChangeText={(value) => {
-                  setServiceLocation(value);
-                  setServiceCoordinates(undefined);
-                  setError('');
-                }}
-                placeholder="Ej. Del Valle, Benito Juárez, CDMX"
-              />
-              <Pressable
-                accessibilityRole="button"
-                disabled={locating}
-                onPress={() => void loadCurrentLocation()}
-                style={[styles.locationButton, locating && styles.primaryButtonDisabled]}
-              >
-                {locating ? (
-                  <ActivityIndicator color={colors.tealDark} size="small" />
+              {isSignup && (
+                <>
+                  <Text style={styles.label}>Quiero registrarme como</Text>
+                  <View style={styles.roleRow}>
+                    <RoleOption
+                      active={role === 'family'}
+                      description="Busco cuidado para mi familia"
+                      icon="F"
+                      label="Familia"
+                      onPress={() => setRole('family')}
+                    />
+                    <RoleOption
+                      active={role === 'caregiver'}
+                      description="Quiero ofrecer mis servicios"
+                      icon="C"
+                      label="Cuidador"
+                      onPress={() => setRole('caregiver')}
+                    />
+                  </View>
+                  <Text style={styles.sectionTitle}>Cuenta</Text>
+                  <Input
+                    error={nameError}
+                    label="Nombre completo"
+                    value={name}
+                    onChangeText={(value) => updateValidatedField('name', value)}
+                    placeholder="Tu nombre"
+                  />
+                  <Input
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    label="Correo electrónico"
+                    value={email}
+                    onChangeText={(value) => {
+                      setEmail(value);
+                      setError('');
+                    }}
+                    placeholder="nombre@correo.com"
+                  />
+                  <Input
+                    error={phoneError}
+                    keyboardType="phone-pad"
+                    label="Teléfono"
+                    value={phone}
+                    onChangeText={(value) => updateValidatedField('phone', value)}
+                    placeholder="10 dígitos"
+                  />
+                  <Input
+                    error={passwordError}
+                    label="Contraseña"
+                    value={password}
+                    onChangeText={(value) => updateValidatedField('password', value)}
+                    placeholder="Mínimo 8 caracteres"
+                    secureTextEntry
+                  />
+                  {isCaregiverSignup && (
+                    <>
+                      <Text style={styles.sectionTitle}>Perfil Profesional</Text>
+                      <Input
+                        label="Título profesional"
+                        value={professionalTitle}
+                        onChangeText={(value) => {
+                          setProfessionalTitle(value);
+                          setError('');
+                        }}
+                        placeholder="Ej. Cuidadora de personas mayores"
+                      />
+                      <Input
+                        label="Zona donde ofreces cuidados"
+                        value={serviceLocation}
+                        onChangeText={(value) => {
+                          setServiceLocation(value);
+                          setServiceCoordinates(undefined);
+                          setError('');
+                        }}
+                        placeholder="Ej. Del Valle, Benito Juárez, CDMX"
+                      />
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={locating}
+                        onPress={() => void loadCurrentLocation()}
+                        style={[styles.locationButton, locating && styles.primaryButtonDisabled]}
+                      >
+                        {locating ? (
+                          <ActivityIndicator color={authColors.primary} size="small" />
+                        ) : (
+                          <Text style={styles.locationButtonText}>Usar mi ubicación actual</Text>
+                        )}
+                      </Pressable>
+                      <Input
+                        keyboardType="number-pad"
+                        label="Cédula profesional"
+                        value={identificationNumber}
+                        onChangeText={(value) => updateValidatedField('identificationNumber', value)}
+                        placeholder="Número de cédula"
+                        error={identificationNumberError}
+                      />
+                      <Input
+                        autoCapitalize="characters"
+                        error={rfcError}
+                        label="RFC"
+                        value={rfc}
+                        onChangeText={(value) => updateValidatedField('rfc', value)}
+                        placeholder="Ej. XAXX010101000"
+                      />
+                    </>
+                  )}
+                </>
+              )}
+              {!isSignup && (
+                <Input
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  label="Correo electrónico"
+                  lightLabel
+                  value={email}
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    setError('');
+                  }}
+                  placeholder="nombre@correo.com"
+                />
+              )}
+              {!isSignup && (
+                <Input
+                  error={passwordError}
+                  label="Contraseña"
+                  lightLabel
+                  value={password}
+                  onChangeText={(value) => updateValidatedField('password', value)}
+                  placeholder="Mínimo 8 caracteres"
+                  secureTextEntry
+                />
+              )}
+              {!isSignup && (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setRecoveryMessage('La recuperación de contraseña aún no está disponible. Contacta al equipo de soporte para recuperar tu acceso.')}
+                  style={styles.recoveryLink}
+                >
+                  <Text style={[styles.switchLink, !isSignup && styles.loginText]}>
+                    ¿Olvidaste tu contraseña?
+                  </Text>
+                </Pressable>
+              )}
+              {!!recoveryMessage && (
+                <Text
+                  accessibilityRole="alert"
+                  style={[styles.recoveryMessage, !isSignup && styles.loginText]}
+                >
+                  {recoveryMessage}
+                </Text>
+              )}
+              {!!error && (
+                <Text accessibilityRole="alert" style={[styles.error, !isSignup && styles.loginText]}>
+                  {error}
+                </Text>
+              )}
+              <Pressable accessibilityRole="button" disabled={loading} onPress={submit} style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}>
+                {loading ? (
+                  <ActivityIndicator color={authColors.white} />
                 ) : (
-                  <Text style={styles.locationButtonText}>Usar mi ubicación actual</Text>
+                  <Text style={styles.primaryText}>
+                    {isCaregiverSignup ? 'Continuar con mi perfil' : isSignup ? 'Crear cuenta' : 'Iniciar sesión'}
+                  </Text>
                 )}
               </Pressable>
-              <Input
-                keyboardType="number-pad"
-                label="Cédula profesional"
-                value={identificationNumber}
-                onChangeText={(value) => updateValidatedField('identificationNumber', value)}
-                placeholder="Número de cédula"
-                error={identificationNumberError}
-              />
-              <Input
-                autoCapitalize="characters"
-                error={rfcError}
-                label="RFC"
-                value={rfc}
-                onChangeText={(value) => updateValidatedField('rfc', value)}
-                placeholder="Ej. XAXX010101000"
-              />
-            </>
-          )}
-        </>
-      )}
-      {!isSignup && (
-        <Input
-          autoCapitalize="none"
-          keyboardType="email-address"
-          label="Correo electrónico"
-          value={email}
-          onChangeText={(value) => {
-            setEmail(value);
-            setError('');
-          }}
-          placeholder="nombre@correo.com"
-        />
-      )}
-      {!isSignup && (
-        <Input
-          error={passwordError}
-          label="Contraseña"
-          value={password}
-          onChangeText={(value) => updateValidatedField('password', value)}
-          placeholder="Mínimo 8 caracteres"
-          secureTextEntry
-        />
-      )}
-
-        {!isSignup && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setRecoveryMessage('La recuperación de contraseña aún no está disponible. Contacta al equipo de soporte para recuperar tu acceso.')}
-            style={styles.recoveryLink}
-          >
-            <Text style={styles.switchLink}>¿Olvidaste tu contraseña?</Text>
-          </Pressable>
-        )}
-        {!!recoveryMessage && <Text accessibilityRole="alert" style={styles.recoveryMessage}>{recoveryMessage}</Text>}
-        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-        <Pressable accessibilityRole="button" disabled={loading} onPress={submit} style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}>
-          {loading ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.primaryText}>
-              {isCaregiverSignup ? 'Continuar con mi perfil' : isSignup ? 'Crear cuenta' : 'Iniciar sesión'}
-            </Text>
-          )}
-        </Pressable>
-        <View style={styles.switchLine}>
-          <Text style={styles.switchText}>{isSignup ? '¿Ya tienes una cuenta?' : '¿Aún no tienes cuenta?'}</Text>
-          <Pressable accessibilityRole="button" onPress={changeMode}>
-            <Text style={styles.switchLink}>{isSignup ? ' Inicia sesión' : ' Regístrate como cuidador'}</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+              <View style={styles.switchLine}>
+                <Text style={[styles.switchText, !isSignup && styles.loginText]}>
+                  {isSignup ? '¿Ya tienes una cuenta?' : '¿Aún no tienes cuenta?'}
+                </Text>
+                <Pressable accessibilityRole="button" onPress={changeMode}>
+                  <Text style={[styles.switchLink, !isSignup && styles.loginText]}>
+                    {isSignup ? ' Inicia sesión' : ' Regístrate como cuidador'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
     </ScreenTransition>
   );
 }
@@ -469,26 +536,35 @@ type InputProps = {
   onChangeText: (value: string) => void;
   placeholder: string;
   error?: string;
+  lightLabel?: boolean;
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'characters';
   keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'number-pad';
 };
 
-function Input({ label, error, ...inputProps }: InputProps) {
+function Input({ label, error, lightLabel = false, ...inputProps }: InputProps) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <View style={styles.inputGroup}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, lightLabel && styles.loginText]}>{label}</Text>
       <TextInput
         autoCapitalize={inputProps.autoCapitalize}
         keyboardType={inputProps.keyboardType}
+        onBlur={() => setFocused(false)}
         onChangeText={inputProps.onChangeText}
+        onFocus={() => setFocused(true)}
         placeholder={inputProps.placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={authColors.neutral}
         secureTextEntry={inputProps.secureTextEntry}
-        style={styles.input}
+        style={[styles.input, focused && styles.inputFocused]}
         value={inputProps.value}
       />
-      {!!error && <Text accessibilityRole="alert" style={styles.fieldError}>{error}</Text>}
+      {!!error && (
+        <Text accessibilityRole="alert" style={[styles.fieldError, lightLabel && styles.loginText]}>
+          {error}
+        </Text>
+      )}
     </View>
   );
 }
@@ -521,37 +597,70 @@ function RoleOption({
 }
 
 const styles = StyleSheet.create({
-  screen: { alignSelf: 'center', backgroundColor: colors.canvas, flexGrow: 1, justifyContent: 'center', maxWidth: 480, paddingHorizontal: 25, paddingVertical: 54, width: '100%' },
-  back: { alignItems: 'center', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 21, borderWidth: 1, height: 42, justifyContent: 'center', left: 22, position: 'absolute', top: 16, width: 42 },
-  backText: { color: colors.ink, fontSize: 32, lineHeight: 36, marginTop: -4 },
-  brandLockup: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginBottom: 35 },
-  brandMark: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 13, height: 34, justifyContent: 'center', width: 34 },
-  brandMarkText: { color: colors.white, fontSize: 19, fontWeight: '800' },
-  brand: { color: colors.ink, fontSize: 17, fontWeight: '800', marginLeft: 9 },
-  eyebrow: { color: colors.tealDark, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, textAlign: 'center' },
-  title: { color: colors.ink, fontSize: 28, fontWeight: '800', marginTop: 8, textAlign: 'center' },
-  subtitle: { color: colors.muted, fontSize: 13, lineHeight: 20, marginBottom: 27, marginTop: 8, textAlign: 'center' },
+  screen: { backgroundColor: authColors.canvas, flex: 1 },
+  backgroundImage: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  back: {
+    alignItems: 'center',
+    backgroundColor: authColors.white,
+    borderColor: authColors.neutral,
+    borderRadius: 21,
+    borderWidth: 1,
+    elevation: 3,
+    height: 42,
+    justifyContent: 'center',
+    left: 20,
+    position: 'absolute',
+    top: 16,
+    width: 42,
+    zIndex: 2,
+  },
+  backText: { color: authColors.ink, fontSize: 32, lineHeight: 36, marginTop: -4 },
+  keyboardAvoiding: { flex: 1 },
+  scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
+  formPanel: {
+    alignSelf: 'center',
+    backgroundColor: authColors.white,
+    borderRadius: 26,
+    marginBottom: 12,
+    maxWidth: 480,
+    paddingHorizontal: 25,
+    paddingBottom: 22,
+    paddingTop: 22,
+    width: '100%',
+  },
+  loginFormPanel: { backgroundColor: 'transparent', borderRadius: 0 },
+  loginBrand: { marginLeft: 0 },
+  loginText: { color: authColors.white },
+  brandLockup: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginBottom: 18 },
+  brandMark: { alignItems: 'center', backgroundColor: authColors.light, borderRadius: 13, height: 34, justifyContent: 'center', width: 34 },
+  brandMarkText: { color: authColors.ink, fontSize: 19, fontWeight: '800' },
+  brand: { color: authColors.ink, fontSize: 17, fontWeight: '800', marginLeft: 9 },
+  eyebrow: { color: authColors.secondary, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, textAlign: 'center' },
+  title: { color: authColors.ink, fontSize: 28, fontWeight: '800', marginTop: 8, textAlign: 'center' },
+  subtitle: { color: authColors.secondary, fontSize: 13, lineHeight: 20, marginBottom: 20, marginTop: 8, textAlign: 'center' },
   roleRow: { flexDirection: 'row', marginBottom: 18 },
-  roleOption: { alignItems: 'center', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 13, borderWidth: 1, flex: 1, marginRight: 8, minHeight: 105, paddingHorizontal: 8, paddingVertical: 11 },
-  activeRoleOption: { backgroundColor: colors.tealPale, borderColor: colors.tealDark },
-  roleIcon: { color: colors.muted, fontSize: 20 },
-  activeRoleIcon: { color: colors.tealDark },
-  roleLabel: { color: colors.ink, fontSize: 12, fontWeight: '800', marginTop: 4 },
-  roleDescription: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 4, textAlign: 'center' },
-  sectionTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginBottom: 13, marginTop: 3 },
-  inputGroup: { marginBottom: 16 },
-  label: { color: colors.ink, fontSize: 12, fontWeight: '700', marginBottom: 7 },
-  input: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 14, borderWidth: 1, color: colors.ink, fontSize: 14, height: 52, paddingHorizontal: 15 },
-  fieldError: { color: colors.tealDark, fontSize: 11, lineHeight: 15, marginTop: 5 },
+  roleOption: { alignItems: 'center', backgroundColor: authColors.white, borderColor: authColors.neutral, borderRadius: 13, borderWidth: 1, flex: 1, marginRight: 8, minHeight: 105, paddingHorizontal: 8, paddingVertical: 11 },
+  activeRoleOption: { backgroundColor: authColors.light, borderColor: authColors.primary },
+  roleIcon: { color: authColors.secondary, fontSize: 20 },
+  activeRoleIcon: { color: authColors.primary },
+  roleLabel: { color: authColors.ink, fontSize: 12, fontWeight: '800', marginTop: 4 },
+  roleDescription: { color: authColors.secondary, fontSize: 9, lineHeight: 13, marginTop: 4, textAlign: 'center' },
+  sectionTitle: { color: authColors.primary, fontSize: 14, fontWeight: '800', marginBottom: 13, marginTop: 3 },
+  inputGroup: { marginBottom: 14 },
+  label: { color: authColors.ink, fontSize: 12, fontWeight: '700', marginBottom: 7 },
+  input: { backgroundColor: authColors.white, borderColor: authColors.neutral, borderRadius: 14, borderWidth: 1, color: authColors.ink, fontSize: 14, height: 52, paddingHorizontal: 15 },
+  inputFocused: { borderColor: authColors.secondary },
+  fieldError: { color: authColors.ink, fontSize: 11, lineHeight: 15, marginTop: 5 },
   recoveryLink: { alignSelf: 'flex-end', marginBottom: 14, marginTop: -5, paddingVertical: 3 },
-  recoveryMessage: { color: colors.muted, fontSize: 11, lineHeight: 16, marginBottom: 12 },
-  locationButton: { alignSelf: 'flex-start', backgroundColor: colors.tealPale, borderRadius: 10, marginBottom: 15, marginTop: -7, paddingHorizontal: 13, paddingVertical: 11 },
-  locationButtonText: { color: colors.tealDark, fontSize: 11, fontWeight: '700' },
-  error: { color: colors.tealDark, fontSize: 12, marginBottom: 12 },
-  primaryButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 14, marginTop: 8, minHeight: 52, justifyContent: 'center', paddingVertical: 14 },
+  recoveryMessage: { color: authColors.secondary, fontSize: 11, lineHeight: 16, marginBottom: 12 },
+  locationButton: { alignSelf: 'flex-start', backgroundColor: authColors.light, borderRadius: 10, marginBottom: 15, marginTop: -7, paddingHorizontal: 13, paddingVertical: 11 },
+  locationButtonText: { color: authColors.primary, fontSize: 11, fontWeight: '700' },
+  error: { color: authColors.ink, fontSize: 12, marginBottom: 12 },
+  primaryButton: { alignItems: 'center', backgroundColor: authColors.primary, borderRadius: 14, marginTop: 8, minHeight: 52, justifyContent: 'center', paddingVertical: 14 },
   primaryButtonDisabled: { opacity: 0.7 },
-  primaryText: { color: colors.white, fontSize: 14, fontWeight: '800' },
+  primaryText: { color: authColors.white, fontSize: 14, fontWeight: '800' },
   switchLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginTop: 23 },
-  switchText: { color: colors.muted, fontSize: 12 },
-  switchLink: { color: colors.tealDark, fontSize: 12, fontWeight: '800' },
+  switchText: { color: authColors.secondary, fontSize: 12 },
+  switchLink: { color: authColors.secondary, fontSize: 12, fontWeight: '800' },
 });

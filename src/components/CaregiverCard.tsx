@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 9,
     padding: 12,
-    shadowColor: '#070707',
+    shadowColor: colors.ink,
     shadowOffset: { height: 3, width: 0 },
     shadowOpacity: 0.05,
     shadowRadius: 10,

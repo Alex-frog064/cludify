@@ -91,7 +91,7 @@ function TabButton({ onPress, selected, tab }: { onPress: () => void; selected: 
         onPress={onPress}
         style={styles.tab}
       >
-        <Icon color={selected ? colors.white : colors.ink} size={21} strokeWidth={2} />
+        <Icon color={selected ? colors.white : colors.line} size={21} strokeWidth={2} />
         {selected && (
           <Animated.Text numberOfLines={1} style={[styles.label, { opacity: labelOpacity }]}>
             {tab.label}

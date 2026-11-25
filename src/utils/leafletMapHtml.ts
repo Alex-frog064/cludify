@@ -1,4 +1,5 @@
 import type { Coordinates, MapMarker } from '../types';
+import { colors } from '../theme';
 
 export function parseMapMarkerMessage(data: string): string | null {
   try {
@@ -45,39 +46,30 @@ export function createLeafletMapHtml(
     <style>
       html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; }
       body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-      .leaflet-container { background: #E8ECEB; }
+      .leaflet-container { background: ${colors.map}; }
       .leaflet-tile { filter: grayscale(1) saturate(.25) contrast(.94) brightness(1.04); }
-      .price-marker { background: transparent; border: 0; }
+      .price-marker { border: 0; }
       .marker-wrap {
         align-items: center; display: flex; height: 42px; justify-content: center;
         position: relative; width: 96px;
       }
-      .marker-wrap::before {
-        animation: marker-pulse 1.9s ease-out infinite; background: rgba(218,86,58,.23);
-        border-radius: 50%; content: ''; height: 32px; left: 50%; position: absolute;
-        top: 50%; transform: translate(-50%,-50%); width: 32px;
-      }
-      @keyframes marker-pulse {
-        0% { opacity: .8; transform: translate(-50%,-50%) scale(.7); }
-        100% { opacity: 0; transform: translate(-50%,-50%) scale(1.8); }
-      }
       .price-pill {
-        background: #DA563A; border: 2px solid #fff; border-radius: 16px;
-        color: #fff; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
+        background: ${colors.tealDark}; border: 2px solid ${colors.white}; border-radius: 16px;
+        color: ${colors.white}; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
         padding: 7px 10px; position: relative; white-space: nowrap;
-        box-shadow: 0 3px 10px rgba(218,86,58,.34); z-index: 1;
+        z-index: 1;
       }
       .user-dot {
-        width: 16px; height: 16px; background: #DA563A; border: 3px solid white;
-        border-radius: 50%; box-shadow: 0 0 0 8px rgba(218,86,58,.22);
+        width: 16px; height: 16px; background: ${colors.tealDark}; border: 3px solid ${colors.white};
+        border-radius: 50%;
       }
       .leaflet-popup-content-wrapper { border-radius: 12px; }
-      .leaflet-popup-content { color: #070707; font-size: 12px; margin: 10px 13px; }
+      .leaflet-popup-content { color: ${colors.ink}; font-size: 12px; margin: 10px 13px; }
       .leaflet-control-attribution { font-size: 9px !important; }
-      .popup-line { color: #6F6F73; font-size: 11px; margin-top: 3px; }
-      .popup-rate { color: #DA563A; font-size: 12px; font-weight: 800; margin-top: 7px; }
+      .popup-line { color: ${colors.muted}; font-size: 11px; margin-top: 3px; }
+      .popup-rate { color: ${colors.tealDark}; font-size: 12px; font-weight: 800; margin-top: 7px; }
       .profile-button {
-        background: #DA563A; border: 0; border-radius: 9px; color: #fff;
+        background: ${colors.tealDark}; border: 0; border-radius: 9px; color: ${colors.white};
         cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
         margin-top: 9px; padding: 7px 11px; width: 100%;
       }
@@ -107,7 +99,7 @@ export function createLeafletMapHtml(
         if (selected) {
           L.polyline(
             [[data.center.latitude, data.center.longitude], [selected.latitude, selected.longitude]],
-            { color: '#DA563A', dashArray: '4, 8', lineCap: 'round', opacity: .7, weight: 4 }
+            { color: '${colors.tealDark}', dashArray: '4, 8', lineCap: 'round', weight: 4 }
           ).addTo(map);
         }
       }

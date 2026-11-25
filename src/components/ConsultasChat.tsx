@@ -408,7 +408,7 @@ export function ConsultasChat({
               multiline
               onChangeText={setDraft}
               placeholder="Escribe tu mensaje..."
-              placeholderTextColor={colors.muted}
+              placeholderTextColor={colors.line}
               style={styles.composerInput}
               value={draft}
             />
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   header: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18 },
   page: { paddingBottom: 36, paddingHorizontal: 18, paddingTop: 20 },
-  pageTitle: { color: colors.ink, fontSize: 26, fontWeight: '800' },
+  pageTitle: { color: colors.tealDark, fontSize: 26, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 12, marginTop: 6 },
   loadingWrap: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   loadingText: { color: colors.muted, fontSize: 12, marginTop: 10 },
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     width: 56,
   },
   emptyIcon: { color: colors.tealDark, fontSize: 34 },
-  emptyTitle: { color: colors.ink, fontSize: 16, fontWeight: '800', marginTop: 14, textAlign: 'center' },
+  emptyTitle: { color: colors.tealDark, fontSize: 16, fontWeight: '800', marginTop: 14, textAlign: 'center' },
   emptyText: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 8, textAlign: 'center' },
   primaryButton: {
     backgroundColor: colors.teal,
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
-  listTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  listTitle: { color: colors.tealDark, fontSize: 16, fontWeight: '800' },
   listSubtitle: { color: colors.muted, fontSize: 11, marginTop: 4 },
   countBadge: {
     alignItems: 'center',
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
   },
   countBadgeText: { color: colors.tealDark, fontSize: 12, fontWeight: '800' },
   pendingBanner: { backgroundColor: colors.highlightSoft, borderRadius: 18, marginHorizontal: 16, marginTop: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  pendingBannerTitle: { color: colors.ink, fontSize: 11, fontWeight: '800' },
+  pendingBannerTitle: { color: colors.tealDark, fontSize: 11, fontWeight: '800' },
   pendingBannerText: { color: colors.ink, fontSize: 9, marginTop: 3 },
   conversationList: { paddingHorizontal: 16, paddingBottom: 32 },
   conversationCard: {
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
   backButtonText: { color: colors.tealDark, fontSize: 34, lineHeight: 38 },
   threadTopCopy: { flex: 1, marginLeft: 11, minWidth: 0 },
   profileButton: { backgroundColor: colors.tealPale, borderRadius: 16, marginLeft: 8, paddingHorizontal: 11, paddingVertical: 8 },
-  profileButtonText: { color: colors.tealDark, fontSize: 10, fontWeight: '800' },
+  profileButtonText: { color: colors.muted, fontSize: 10, fontWeight: '800' },
   threadDetails: {
     backgroundColor: colors.white,
     paddingHorizontal: 20,
@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
   bubbleText: { color: colors.ink, fontSize: 13, lineHeight: 19 },
   ownBubbleText: { color: colors.white },
   bubbleTime: { color: colors.muted, fontSize: 9, marginTop: 5, textAlign: 'right' },
-  ownBubbleTime: { color: 'rgba(255,255,255,0.75)' },
+  ownBubbleTime: { color: colors.white },
   threadEmpty: {
     alignSelf: 'center',
     backgroundColor: colors.white,
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  threadEmptyTitle: { color: colors.ink, fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  threadEmptyTitle: { color: colors.tealDark, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   threadEmptyText: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 6, textAlign: 'center' },
   messagesLoading: { alignItems: 'center', alignSelf: 'center', marginBottom: 18 },
   messagesLoadingText: { color: colors.muted, fontSize: 11, marginTop: 8 },
