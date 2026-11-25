@@ -79,7 +79,11 @@ export function EditableProfileAvatar({ uri, name, size, onChange }: Props) {
         ]}
       >
         {uri ? (
-          <Image source={{ uri }} style={{ borderRadius: (size - 8) / 2, height: size - 8, width: size - 8 }} />
+          <Image
+            resizeMode="cover"
+            source={{ uri }}
+            style={{ borderRadius: (size - 8) / 2, height: size - 8, width: size - 8 }}
+          />
         ) : (
           <Text style={[styles.initial, { fontSize: size * 0.37 }]}>{name.charAt(0).toUpperCase() || '?'}</Text>
         )}

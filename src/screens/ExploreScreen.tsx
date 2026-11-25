@@ -393,7 +393,7 @@ function CaregiverListItem({ caregiver, onPress }: { caregiver: NearbyCaregiver;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.caregiverRow}>
       <View style={styles.caregiverAvatar}>
-        <Image source={{ uri: caregiver.image }} style={styles.caregiverAvatarImage} />
+        <Image resizeMode="cover" source={{ uri: caregiver.image }} style={styles.caregiverAvatarImage} />
       </View>
       <View style={styles.caregiverInfo}>
         <View style={styles.caregiverNameLine}>
@@ -435,7 +435,7 @@ function CaregiverDetail({
       <View style={styles.detailTopline}>
         <View style={styles.detailIdentity}>
           <View style={styles.detailAvatar}>
-            <Image source={{ uri: caregiver.image }} style={styles.detailAvatarImage} />
+            <Image resizeMode="cover" source={{ uri: caregiver.image }} style={styles.detailAvatarImage} />
           </View>
           <View style={styles.detailNameCopy}>
             <Text numberOfLines={1} style={styles.detailName}>{caregiver.name}</Text>

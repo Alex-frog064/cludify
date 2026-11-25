@@ -1,4 +1,4 @@
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Caregiver } from '../types';
 import { colors } from '../theme';
 
@@ -11,9 +11,11 @@ type Props = {
 };
 
 export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare, onMessage, messageLoading }: Props) {
+  const compactActions = useWindowDimensions().width < 380;
+
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} style={styles.contentScroll}>
         <View style={styles.hero}>
           <Pressable accessibilityLabel="Volver" onPress={onBack} style={styles.backButton}>
             <Text style={styles.backText}>{"<"}</Text>
@@ -21,7 +23,7 @@ export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare, onMes
           <Pressable accessibilityLabel="Guardar en favoritos" style={styles.favorite}>
             <Text style={styles.favoriteText}>Fav</Text>
           </Pressable>
-          <Image source={{ uri: caregiver.image }} style={styles.photo} />
+          <Image resizeMode="cover" source={{ uri: caregiver.image }} style={styles.photo} />
           <Text style={styles.name}>{caregiver.name}</Text>
           <Text style={styles.title}>{caregiver.title}</Text>
           <Text style={styles.location}>⌖  {caregiver.location} · a {caregiver.distance}</Text>
@@ -73,15 +75,15 @@ export function CaregiverProfileScreen({ caregiver, onBack, onRequestCare, onMes
         </Section>
       </ScrollView>
 
-      <View style={styles.bottom}>
-        <View style={styles.priceBlock}>
+      <View style={[styles.bottom, compactActions && styles.bottomCompact]}>
+        <View style={[styles.priceBlock, compactActions && styles.priceBlockCompact]}>
           <Text style={styles.price}>${caregiver.hourlyRate} <Text style={styles.priceUnit}>MXN / hora</Text></Text>
           <Text style={styles.bodySmall}>Sin cobro hasta confirmar</Text>
         </View>
-        <Pressable onPress={onRequestCare} style={styles.outlineButton}>
+        <Pressable onPress={onRequestCare} style={[styles.outlineButton, compactActions && styles.compactOutlineButton]}>
           <Text style={styles.outlineButtonText}>Solicitar cuidado</Text>
         </Pressable>
-        <Pressable disabled={messageLoading} onPress={onMessage} style={styles.requestButton}>
+        <Pressable disabled={messageLoading} onPress={onMessage} style={[styles.requestButton, compactActions && styles.compactRequestButton]}>
           <Text style={styles.requestText}>{messageLoading ? 'Abriendo...' : 'Enviar mensaje'}</Text>
         </Pressable>
       </View>
@@ -109,6 +111,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
+  contentScroll: { flex: 1 },
   content: { paddingBottom: 18 },
   hero: { alignItems: 'center', backgroundColor: colors.tealPale, paddingBottom: 23, paddingTop: 52 },
   backButton: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 20, height: 38, justifyContent: 'center', left: 18, position: 'absolute', top: 12, width: 38 },
@@ -142,11 +145,15 @@ const styles = StyleSheet.create({
   reviewBy: { color: colors.muted, fontSize: 9, marginTop: 8 },
   stars: { color: colors.gold, fontSize: 12, letterSpacing: 1, marginTop: 5 },
   bottom: { alignItems: 'center', backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 12 },
+  bottomCompact: { flexWrap: 'wrap', rowGap: 8 },
   priceBlock: { flexShrink: 1 },
+  priceBlockCompact: { flexBasis: '100%' },
   price: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   priceUnit: { color: colors.muted, fontSize: 9, fontWeight: '400' },
   outlineButton: { borderColor: colors.muted, borderRadius: 20, borderWidth: 1, marginHorizontal: 8, paddingHorizontal: 12, paddingVertical: 12 },
+  compactOutlineButton: { alignItems: 'center', flex: 1, marginHorizontal: 0, marginRight: 8, minWidth: 0 },
   outlineButtonText: { color: colors.muted, fontSize: 10, fontWeight: '800' },
   requestButton: { backgroundColor: colors.teal, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 13 },
+  compactRequestButton: { alignItems: 'center', flex: 1, minWidth: 0 },
   requestText: { color: colors.white, fontSize: 10, fontWeight: '800' },
 });

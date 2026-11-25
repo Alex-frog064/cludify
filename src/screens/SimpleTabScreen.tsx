@@ -180,7 +180,10 @@ export function SimpleTabScreen({
   }
 
   return (
-    <ScrollView contentContainerStyle={tab === 'account' && signedInUser?.role === 'family' ? styles.familyScreen : styles.screen}>
+    <ScrollView
+      contentContainerStyle={tab === 'account' && signedInUser?.role === 'family' ? styles.familyScreen : styles.screen}
+      style={styles.screenScroll}
+    >
       {!(tab === 'account' && signedInUser?.role === 'family') && (
         <>
           <Text style={styles.title}>{content.title}</Text>
@@ -418,6 +421,7 @@ function FamilyStat({ value, label }: { value: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  screenScroll: { flex: 1 },
   screen: { backgroundColor: colors.canvas, flexGrow: 1, paddingHorizontal: 19, paddingTop: 30, paddingBottom: 46 },
   familyScreen: { backgroundColor: colors.canvas, flexGrow: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 52 },
   familyProfile: { flex: 1 },
@@ -482,7 +486,7 @@ const styles = StyleSheet.create({
   serviceInfo: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 5 },
   serviceNote: { color: colors.ink, fontSize: 10, lineHeight: 14, marginTop: 7 },
   serviceMeta: { color: colors.tealDark, fontSize: 9, lineHeight: 13, marginTop: 7 },
-  serviceActions: { flexDirection: 'row', gap: 8, marginTop: 9 },
+  serviceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 9 },
   serviceAction: { backgroundColor: colors.tealPale, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7 },
   serviceActionText: { color: colors.tealDark, fontSize: 9, fontWeight: '800' },
   serviceActionDanger: { backgroundColor: colors.tealPale },

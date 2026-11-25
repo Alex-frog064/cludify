@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Plus, UserRoundPlus } from 'lucide-react-native';
 import {
   createAbuelo,
@@ -476,9 +487,13 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
       )}
 
       <Modal visible={!!draft} animationType="fade" transparent onRequestClose={() => setPendingConfirmation({ type: 'discardRecipient' })}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+          style={styles.modalKeyboardAvoiding}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
               {draft && (<>
           <Text style={styles.formTitle}>{profiles.some((profile) => profile.id === draft.id) ? 'Editar datos' : 'Nueva persona a cuidar'}</Text>
           <FormInput
@@ -551,15 +566,20 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </Pressable>
               </>)}
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={geoModalOpen && !!draft} animationType="fade" transparent onRequestClose={() => setPendingConfirmation({ type: 'discardLocation' })}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+          style={styles.modalKeyboardAvoiding}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
               <Text style={styles.formTitle}>Ubicación</Text>
               <Text style={styles.sectionHint}>Captura dirección por partes para obtener coordenadas más exactas.</Text>
               <FormInput label="Calle y número" value={draft?.geofence?.calle ?? ''} onChangeText={(calle) => updateGeofence({ calle })} placeholder="Ej. Calle 60 123" />
@@ -608,15 +628,20 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
                 setGeoModalOpen(false);
                 setGeofenceBeforeEdit(undefined);
               }} style={styles.saveButton}><Text style={styles.saveButtonText}>Listo</Text></Pressable>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={!!medModal && !!draft} animationType="fade" transparent onRequestClose={() => setPendingConfirmation({ type: 'discardMedication' })}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+          style={styles.modalKeyboardAvoiding}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
               <Text style={styles.formTitle}>{draft?.medications.some((m) => m.id === medModal?.id) ? 'Editar medicamento' : 'Nuevo medicamento'}</Text>
               <FormInput label="Nombre" value={medModal?.name ?? ''} onChangeText={(name) => setMedModal((m) => m ? { ...m, name } : m)} placeholder="Nombre del medicamento" />
               <FormInput label="Dosis" value={medModal?.dosage ?? ''} onChangeText={(dosage) => setMedModal((m) => m ? { ...m, dosage } : m)} placeholder="Ej. 1 tableta" />
@@ -631,9 +656,10 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
                 setMedModal(null);
               }} style={styles.saveButton}><Text style={styles.saveButtonText}>Guardar medicamento</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => setPendingConfirmation({ type: 'discardMedication' })} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancelar</Text></Pressable>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <ConfirmationModal
@@ -756,6 +782,7 @@ const styles = StyleSheet.create({
   removeLink: { alignSelf: 'flex-start', marginTop: 12, paddingVertical: 4 },
   removeLinkText: { color: colors.accent, fontSize: 10, fontWeight: '700' },
   modalBackdrop: { alignItems: 'center', backgroundColor: colors.ink, flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 24 },
+  modalKeyboardAvoiding: { flex: 1 },
   modalCard: { backgroundColor: colors.canvas, borderRadius: 24, maxHeight: '90%', maxWidth: 520, width: '100%' },
   modalContent: { padding: 20, paddingBottom: 24 },
   formCard: { alignItems: 'stretch', alignSelf: 'stretch', backgroundColor: colors.canvas, borderRadius: 13, marginTop: 2, padding: 13 },

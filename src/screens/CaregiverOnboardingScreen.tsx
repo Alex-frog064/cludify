@@ -2,8 +2,10 @@ import { useState } from 'react';
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   KeyboardTypeOptions,
   Pressable,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -189,7 +191,11 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+      keyboardVerticalOffset={0}
+      style={styles.screen}
+    >
       <View style={styles.header}>
         <Pressable accessibilityLabel={step === 0 ? 'Salir del registro' : 'Paso anterior'} onPress={step === 0 ? onCancel : () => setStep(step - 1)} style={styles.backButton}>
           <Text style={styles.backText}>{"<"}</Text>
@@ -206,6 +212,7 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
       >
         {step === 0 && (
           <>
@@ -215,7 +222,7 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
 
             <Pressable accessibilityRole="button" onPress={pickPhoto} style={styles.photoPicker}>
               {photoUri ? (
-                <Image source={{ uri: photoUri }} style={styles.photo} />
+                <Image resizeMode="cover" source={{ uri: photoUri }} style={styles.photo} />
               ) : (
                 <View style={styles.photoPlaceholder}><Text style={styles.photoIcon}>＋</Text></View>
               )}
@@ -378,7 +385,7 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
           <Text style={styles.continueText}>{submitting ? 'Guardando...' : step === 2 ? 'Crear perfil' : 'Continuar'}</Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -430,6 +437,7 @@ function Field({
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
+  scrollView: { flex: 1 },
   header: { alignItems: 'center', backgroundColor: colors.white, flexDirection: 'row', height: 54, justifyContent: 'center' },
   backButton: { alignItems: 'center', height: 44, justifyContent: 'center', left: 13, position: 'absolute', width: 44 },
   backText: { color: colors.ink, fontSize: 31, lineHeight: 34, marginTop: -4 },
@@ -466,7 +474,7 @@ const styles = StyleSheet.create({
   selectedChip: { backgroundColor: colors.tealPale, borderColor: colors.tealDark },
   chipText: { color: colors.muted, fontSize: 10, fontWeight: '600' },
   selectedChipText: { color: colors.tealDark },
-  dayList: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  dayList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   dayChip: { alignItems: 'center', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 13, borderWidth: 1, height: 42, justifyContent: 'center', width: 42 },
   selectedDayChip: { backgroundColor: colors.tealDark, borderColor: colors.tealDark },
   dayText: { color: colors.muted, fontSize: 10, fontWeight: '700' },

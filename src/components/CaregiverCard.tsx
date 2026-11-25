@@ -16,7 +16,7 @@ export function CaregiverCard({ caregiver, onPress, compact = false }: Props) {
       onPress={onPress}
       style={[styles.card, compact && styles.compactCard]}
     >
-      <Image source={{ uri: caregiver.image }} style={styles.avatar} />
+      <Image resizeMode="cover" source={{ uri: caregiver.image }} style={styles.avatar} />
       <View style={styles.info}>
         <View style={styles.nameLine}>
           <Text numberOfLines={1} style={styles.name}>{caregiver.name}</Text>

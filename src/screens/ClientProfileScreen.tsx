@@ -137,7 +137,7 @@ export function ClientProfileScreen({ abueloId, familiarNombre, consultaId, toke
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} style={styles.contentScroll}>
         <View style={styles.hero}>
           <Pressable accessibilityLabel="Volver" onPress={onBack} style={styles.backButton}>
             <Text style={styles.backText}>{'<'}</Text>
@@ -257,6 +257,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
+  contentScroll: { flex: 1 },
   content: { paddingBottom: 24 },
   hero: { alignItems: 'center', backgroundColor: colors.tealPale, paddingBottom: 22, paddingTop: 50 },
   backButton: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 20, height: 38, justifyContent: 'center', left: 18, position: 'absolute', top: 12, width: 38 },

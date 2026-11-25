@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { House, MessageCircle, Search, UserRound } from 'lucide-react-native';
 import { secondaryColors as colors } from '../theme';
 import { AccountRole } from '../types';
@@ -39,6 +39,10 @@ type Props = {
 
 export function BottomTabBar({ role = 'family', activeTab, onSelectTab }: Props) {
   const tabs = role === 'caregiver' ? caregiverTabs : familyTabs;
+  const barContentWidth = Math.max(0, useWindowDimensions().width - 40);
+  const inactiveWidth = Math.min(48, barContentWidth / tabs.length);
+  const activeWidthLimit = Math.max(inactiveWidth, barContentWidth - inactiveWidth * (tabs.length - 1));
+
   return (
     <View style={styles.bar}>
       {tabs.map((tab) => {
@@ -48,7 +52,11 @@ export function BottomTabBar({ role = 'family', activeTab, onSelectTab }: Props)
             key={tab.key}
             onPress={() => onSelectTab(tab.key)}
             selected={selected}
-            tab={{ ...tab, activeWidth: activeWidths[tab.label] }}
+            tab={{
+              ...tab,
+              activeWidth: Math.min(activeWidths[tab.label], activeWidthLimit),
+              inactiveWidth,
+            }}
           />
         );
       })}
@@ -56,17 +64,17 @@ export function BottomTabBar({ role = 'family', activeTab, onSelectTab }: Props)
   );
 }
 
-type Tab = { key: TabKey; label: string; icon: TabIcon; activeWidth: number };
+type Tab = { key: TabKey; label: string; icon: TabIcon; activeWidth: number; inactiveWidth: number };
 
 function TabButton({ onPress, selected, tab }: { onPress: () => void; selected: boolean; tab: Tab }) {
-  const [width] = useState(() => new Animated.Value(selected ? tab.activeWidth : 48));
+  const [width] = useState(() => new Animated.Value(selected ? tab.activeWidth : tab.inactiveWidth));
   const [labelOpacity] = useState(() => new Animated.Value(selected ? 1 : 0));
   const Icon = tab.icon;
 
   useEffect(() => {
     const animation = Animated.parallel([
       Animated.spring(width, {
-        toValue: selected ? tab.activeWidth : 48,
+        toValue: selected ? tab.activeWidth : tab.inactiveWidth,
         damping: 19,
         stiffness: 210,
         mass: 0.9,
@@ -80,7 +88,7 @@ function TabButton({ onPress, selected, tab }: { onPress: () => void; selected: 
     ]);
     animation.start();
     return () => animation.stop();
-  }, [labelOpacity, selected, tab.activeWidth, width]);
+  }, [labelOpacity, selected, tab.activeWidth, tab.inactiveWidth, width]);
 
   return (
     <Animated.View style={[styles.tabShell, { width }, selected && styles.activeTabShell]}>
@@ -92,7 +100,7 @@ function TabButton({ onPress, selected, tab }: { onPress: () => void; selected: 
         style={styles.tab}
       >
         <Icon color={selected ? colors.white : colors.line} size={21} strokeWidth={2} />
-        {selected && (
+        {selected && tab.activeWidth >= 82 && (
           <Animated.Text numberOfLines={1} style={[styles.label, { opacity: labelOpacity }]}>
             {tab.label}
           </Animated.Text>

@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
 
 import {
@@ -219,7 +229,11 @@ export function ConsultasChat({
   const selected = consultas.find((item) => item.consulta_id === selectedId);
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+      keyboardVerticalOffset={0}
+      style={styles.screen}
+    >
       {selected ? (
         <View style={styles.threadTopBar}>
           <Pressable
@@ -302,7 +316,7 @@ export function ConsultasChat({
               <Text style={styles.countBadgeText}>{consultas.length}</Text>
             </View>
           </View>
-          <ScrollView contentContainerStyle={styles.conversationList} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={styles.conversationList} showsVerticalScrollIndicator={false} style={styles.threadScroll}>
             {consultas.map((consulta) => {
               const name = conversationTitle(consulta, viewerRole);
               const unreadCount = Number(consulta.no_leidos ?? 0);
@@ -429,7 +443,7 @@ export function ConsultasChat({
       )}
 
       {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -5,7 +5,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -479,7 +481,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
   return (
     <View style={styles.screen}>
       {tab === 'notifications' && (
-        <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false} style={styles.contentScroll}>
           <Text style={styles.pageTitle}>Notificaciones</Text>
           <Text style={styles.subtitle}>Solicitudes, opiniones y novedades de tu perfil.</Text>
           {!user.caregiverProfile?.verificado && (
@@ -581,7 +583,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
       )}
 
       {tab === 'clients' && (
-        <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false} style={styles.contentScroll}>
           <Text style={styles.pageTitle}>Servicios</Text>
           <Text style={styles.subtitle}>Busca, acepta o rechaza las solicitudes de las familias.</Text>
           <TextInput
@@ -641,7 +643,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
       )}
 
       {tab === 'profile' && user.caregiverProfile && (
-        <ScrollView contentContainerStyle={styles.profilePage} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.profilePage} showsVerticalScrollIndicator={false} style={styles.contentScroll}>
           <View style={styles.profileHero}>
             <View style={styles.profileTopLine}>
               <View style={[styles.profileCheckBadge, user.caregiverProfile.verificado && styles.profileCheckBadgeVerified]}>
@@ -741,10 +743,10 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
             </Text>
             <View style={styles.verificationRow}>
               <Pressable onPress={() => askVerificationImage('ine')} style={styles.verificationPick}>
-                {ineUri ? <Image source={{ uri: ineUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar INE</Text>}
+                {ineUri ? <Image resizeMode="contain" source={{ uri: ineUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar INE</Text>}
               </Pressable>
               <Pressable onPress={() => askVerificationImage('selfie')} style={styles.verificationPick}>
-                {selfieUri ? <Image source={{ uri: selfieUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar selfie</Text>}
+                {selfieUri ? <Image resizeMode="contain" source={{ uri: selfieUri }} style={styles.verificationPreview} /> : <Text style={styles.verificationPickText}>Seleccionar selfie</Text>}
               </Pressable>
             </View>
             {verificationSent && <Text style={styles.verificationReviewText}>Documentos enviados. Estamos en revisión.</Text>}
@@ -774,9 +776,13 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
           </View>
 
           <Modal visible={profileEditing} animationType="fade" transparent onRequestClose={() => setProfileConfirmation('discardProfile')}>
-            <View style={styles.modalBackdrop}>
-              <View style={styles.modalCard}>
-                <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+              style={styles.modalKeyboardAvoiding}
+            >
+              <View style={styles.modalBackdrop}>
+                <View style={styles.modalCard}>
+                  <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
                   <Text style={styles.pageTitle}>Editar información</Text>
                   <Text style={styles.subtitle}>Actualiza los datos que ven las familias en tu perfil.</Text>
                   <TextInput style={styles.locationInput} placeholder="Nombre" value={profileDraft.name} onChangeText={(v) => setProfileDraft((d) => ({ ...d, name: v }))} />
@@ -791,9 +797,10 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
                   {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
                   <Pressable disabled={profileSaving} onPress={() => void saveCaregiverProfile()} style={styles.saveLocationButton}><Text style={styles.saveLocationText}>{profileSaving ? 'Guardando...' : 'Guardar cambios'}</Text></Pressable>
                   <Pressable disabled={profileSaving} onPress={() => setProfileConfirmation('discardProfile')} style={styles.signOutButton}><Text style={styles.signOutText}>Cancelar</Text></Pressable>
-                </ScrollView>
+                  </ScrollView>
+                </View>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </Modal>
 
           <LocationEditor coordinates={user.caregiverProfile.serviceCoordinates} location={user.caregiverProfile.serviceLocation} onSave={onSaveLocation} />
@@ -945,6 +952,7 @@ function ProfileStat({ value, label }: { value: string; label: string }) {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
+  contentScroll: { flex: 1 },
   page: { paddingHorizontal: 19, paddingTop: 24, paddingBottom: 48 },
   profilePage: { backgroundColor: colors.canvas, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 52 },
   pageTitle: { color: colors.tealDark, fontSize: 25, fontWeight: '800' },
@@ -1093,6 +1101,7 @@ const styles = StyleSheet.create({
   signOutButton: { alignItems: 'center', borderColor: colors.line, borderRadius: 12, borderWidth: 1, marginTop: 14, paddingVertical: 12 },
   signOutText: { color: colors.tealDark, fontSize: 11, fontWeight: '700' },
   modalBackdrop: { alignItems: 'center', backgroundColor: colors.ink, flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 24 },
+  modalKeyboardAvoiding: { flex: 1 },
   modalCard: { backgroundColor: colors.canvas, borderRadius: 24, maxHeight: '90%', maxWidth: 520, width: '100%' },
   modalContent: { padding: 20, paddingBottom: 24 },
   switchTrack: { width: 48, height: 28, borderRadius: 14, backgroundColor: colors.line, padding: 2 },

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createServicio, getAbuelos, updateServicio } from '../api/auth';
 import { colors } from '../theme';
 import type { Caregiver, Servicio } from '../types';
@@ -123,8 +123,12 @@ export function ServiceRequestScreen({ caregiver, servicio, token, onBack, onCre
   };
 
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+      keyboardVerticalOffset={0}
+      style={styles.screen}
+    >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} style={styles.scrollView}>
         <Pressable accessibilityLabel="Volver" onPress={onBack} style={styles.backButton}>
           <Text style={styles.backText}>‹</Text>
         </Pressable>
@@ -219,12 +223,13 @@ export function ServiceRequestScreen({ caregiver, servicio, token, onBack, onCre
           <Text style={styles.submitText}>{saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Enviar solicitud'}</Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
+  scrollView: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 52, paddingBottom: 24 },
   backButton: { backgroundColor: colors.white, borderRadius: 20, height: 38, justifyContent: 'center', position: 'absolute', left: 18, top: 12, width: 38 },
   backText: { color: colors.ink, fontSize: 30, lineHeight: 34, marginLeft: 11, marginTop: -3 },

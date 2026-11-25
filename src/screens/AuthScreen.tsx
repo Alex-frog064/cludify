@@ -598,7 +598,7 @@ function RoleOption({
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: authColors.canvas, flex: 1 },
-  backgroundImage: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  backgroundImage: { bottom: 0, height: '100%', left: 0, position: 'absolute', right: 0, top: 0, width: '100%' },
   back: {
     alignItems: 'center',
     backgroundColor: authColors.white,
