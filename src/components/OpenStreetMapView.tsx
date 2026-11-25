@@ -31,7 +31,7 @@ export function OpenStreetMapView({ center, markers, showCurrentLocation, select
       originWhitelist={['*']}
       renderLoading={() => (
         <View style={styles.loading}>
-          <ActivityIndicator color={colors.tealDark} />
+          <ActivityIndicator color="#304A6E" />
         </View>
       )}
       scrollEnabled={false}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  FlatList,
   Image,
   Pressable,
   ScrollView,
@@ -12,8 +13,8 @@ import {
   View,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { ChevronRight, Star } from 'lucide-react-native';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
-import { colors } from '../theme';
 import { Caregiver, Coordinates } from '../types';
 import { filterNearbyCaregivers, nearbyRadiusKm } from '../utils/nearbyCaregivers';
 import type { NearbyCaregiver } from '../utils/nearbyCaregivers';
@@ -23,6 +24,10 @@ type Props = { onSelectCaregiver: (caregiver: Caregiver) => void; token?: string
 type LocationStatus = 'loading' | 'ready' | 'denied' | 'error';
 type Category = 'Todos' | 'Adultos mayores' | 'Enfermería' | 'Urgente';
 type IconName = keyof typeof Ionicons.glyphMap;
+type DiscoveryItem =
+  | { id: string; type: 'heading'; section: 'featured' | 'nearby' }
+  | { id: string; type: 'caregiver'; section: 'featured' | 'nearby'; caregiver: NearbyCaregiver }
+  | { id: string; type: 'empty'; section: 'featured' | 'nearby' };
 
 const categories: { label: Category; icon: IconName }[] = [
   { label: 'Todos', icon: 'apps-outline' },
@@ -30,9 +35,20 @@ const categories: { label: Category; icon: IconName }[] = [
   { label: 'Enfermería', icon: 'medkit-outline' },
   { label: 'Urgente', icon: 'alert-circle-outline' },
 ];
+const colors = {
+  ink: '#0F1C30',
+  muted: '#668DC0',
+  tealDark: '#304A6E',
+  tealPale: '#C0D0EF',
+  secondary: '#668DC0',
+  canvas: '#F7F9FC',
+  white: '#FFFFFF',
+  line: '#C2C6CE',
+  map: '#F7F9FC',
+  highlightSoft: '#C0D0EF',
+};
 const radiusOptions = [5, 10, 20];
 const defaultLocation: Coordinates = { latitude: 19.3869, longitude: -99.1627 };
-const collapsedSheetHeight = 232;
 const teal = colors.tealDark;
 
 export function ExploreScreen({ onSelectCaregiver, token }: Props) {
@@ -45,13 +61,14 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
   const [selectedCaregiver, setSelectedCaregiver] = useState<NearbyCaregiver | null>(null);
   const [searchRadiusKm, setSearchRadiusKm] = useState(nearbyRadiusKm);
   const [sheetExpanded, setSheetExpanded] = useState(false);
-  const [sheetHeight] = useState(() => new Animated.Value(collapsedSheetHeight));
   const { height: windowHeight } = useWindowDimensions();
-  const expandedHeight = Math.min(470, Math.max(330, windowHeight * 0.58));
+  const collapsedHeight = Math.min(340, Math.max(300, windowHeight * 0.42));
+  const expandedHeight = Math.min(560, Math.max(collapsedHeight, windowHeight * 0.68));
+  const [sheetHeight] = useState(() => new Animated.Value(collapsedHeight));
 
   useEffect(() => {
     const animation = Animated.spring(sheetHeight, {
-      toValue: sheetExpanded ? expandedHeight : collapsedSheetHeight,
+      toValue: sheetExpanded ? expandedHeight : collapsedHeight,
       damping: 22,
       stiffness: 190,
       mass: 0.9,
@@ -59,7 +76,7 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
     });
     animation.start();
     return () => animation.stop();
-  }, [expandedHeight, sheetExpanded, sheetHeight]);
+  }, [collapsedHeight, expandedHeight, sheetExpanded, sheetHeight]);
 
   const locateUser = useCallback(async () => {
     setLocationStatus('loading');
@@ -124,6 +141,36 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
       .filter((caregiver) => !currentLocation || caregiver.distanceKm == null || caregiver.distanceKm <= searchRadiusKm)
       .filter((caregiver) => matchesCategory(caregiver, activeCategory));
   }, [activeCategory, caregivers, currentLocation, searchRadiusKm, token]);
+
+  const featuredCaregivers = useMemo(
+    () => [...filteredCaregivers].sort((a, b) =>
+      (Number.parseFloat(b.rating) || 0) - (Number.parseFloat(a.rating) || 0) || b.reviews - a.reviews),
+    [filteredCaregivers],
+  );
+
+  const discoveryItems = useMemo<DiscoveryItem[]>(() => {
+    const nearbyCaregivers = sheetExpanded ? filteredCaregivers : filteredCaregivers.slice(0, 2);
+    return [
+      { id: 'featured-heading', type: 'heading', section: 'featured' },
+      ...(featuredCaregivers.length
+        ? featuredCaregivers.map((caregiver) => ({
+            id: `featured-${caregiver.id}`,
+            type: 'caregiver' as const,
+            section: 'featured' as const,
+            caregiver,
+          }))
+        : [{ id: 'featured-empty', type: 'empty' as const, section: 'featured' as const }]),
+      { id: 'nearby-heading', type: 'heading', section: 'nearby' },
+      ...(nearbyCaregivers.length
+        ? nearbyCaregivers.map((caregiver) => ({
+            id: `nearby-${caregiver.id}`,
+            type: 'caregiver' as const,
+            section: 'nearby' as const,
+            caregiver,
+          }))
+        : [{ id: 'nearby-empty', type: 'empty' as const, section: 'nearby' as const }]),
+    ];
+  }, [featuredCaregivers, filteredCaregivers, sheetExpanded]);
 
   const mapMarkers = useMemo(
     () => filteredCaregivers
@@ -285,74 +332,83 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
             onOpenProfile={openSelectedProfile}
           />
         ) : (
-          <>
-            <View style={styles.sheetHeading}>
-              <View style={styles.sheetHeadingCopy}>
-                <Text style={styles.sheetTitle}>Cuidadores cercanos</Text>
-                <Text style={styles.sheetSubtitle}>
-                  {currentLocation ? 'Ordenados por distancia' : 'Explora opciones de cuidado en tu zona'}
-                </Text>
-              </View>
-              <View style={styles.sheetCount}>
-                <Ionicons color={teal} name="people-outline" size={15} />
-                <Text style={styles.sheetCountText}>{filteredCaregivers.length}</Text>
-              </View>
-            </View>
-
-            <ScrollView
-              contentContainerStyle={styles.sheetFilterContent}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.sheetFilters}
-            >
-              {categories.map((category) => {
-                const active = activeCategory === category.label;
+          <FlatList
+            contentContainerStyle={styles.discoveryListContent}
+            data={discoveryItems}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => {
+              if (item.type === 'heading') {
+                if (item.section === 'featured') {
+                  return (
+                    <View style={styles.featuredHeading}>
+                      <Text style={styles.featuredTitle}>Top cuidadores</Text>
+                      <Text style={styles.featuredSubtitle}>Perfiles mejor valorados</Text>
+                    </View>
+                  );
+                }
                 return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    key={category.label}
-                    onPress={() => setActiveCategory(category.label)}
-                    style={[styles.sheetFilter, active && styles.sheetFilterActive]}
-                  >
-                    <Ionicons color={active ? teal : colors.muted} name={category.icon} size={14} />
-                    <Text style={[styles.sheetFilterText, active && styles.sheetFilterTextActive]}>
-                      {category.label}
-                    </Text>
-                  </Pressable>
+                  <View style={styles.sheetHeading}>
+                    <View style={styles.sheetHeadingCopy}>
+                      <Text style={styles.sheetTitle}>Cuidadores cercanos</Text>
+                      <Text style={styles.sheetSubtitle}>
+                        {currentLocation ? 'Ordenados por distancia' : 'Explora opciones de cuidado en tu zona'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityLabel={sheetExpanded ? 'Ver menos cuidadores' : 'Ver todos los cuidadores'}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: sheetExpanded }}
+                      onPress={() => setSheetExpanded((expanded) => !expanded)}
+                      style={styles.seeAllButton}
+                    >
+                      <Text style={styles.seeAllText}>{sheetExpanded ? 'Ver menos' : 'Ver todos'}</Text>
+                      <ChevronRight color={colors.muted} size={16} strokeWidth={2} />
+                    </Pressable>
+                  </View>
                 );
-              })}
-            </ScrollView>
+              }
 
-            <ScrollView
-              contentContainerStyle={styles.caregiverList}
-              showsVerticalScrollIndicator={false}
-              style={styles.caregiverListScroll}
-            >
-              {filteredCaregivers.slice(0, sheetExpanded ? 12 : 2).map((caregiver) => (
-                <CaregiverListItem
-                  caregiver={caregiver}
-                  key={caregiver.id}
-                  onPress={() => {
-                    setSelectedCaregiver(caregiver);
-                    setSheetExpanded(true);
-                  }}
-                />
-              ))}
-              {!filteredCaregivers.length && (
-                <View style={styles.emptyList}>
-                  <Ionicons color={colors.muted} name="location-outline" size={21} />
-                  <Text style={styles.emptyListText}>
-                    {token && caregiversLoading
-                      ? 'Buscando cuidadores…'
-                      : !token
-                        ? 'Inicia sesión para descubrir cuidadores.'
-                        : mapError || 'No hay cuidadores en esta categoría y radio.'}
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          </>
+              if (item.type === 'empty') {
+                if (item.section === 'featured') {
+                  return (
+                    <View style={styles.featuredEmpty}>
+                      {token && caregiversLoading ? (
+                        <ActivityIndicator color={teal} size="small" />
+                      ) : (
+                        <Text style={styles.emptyListText}>
+                          {token ? mapError || 'No hay perfiles destacados en esta categoría.' : 'Inicia sesión para descubrir cuidadores.'}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                }
+                return (
+                  <View style={styles.emptyList}>
+                    {token && caregiversLoading ? <ActivityIndicator color={teal} size="small" /> : (
+                      <>
+                        <Ionicons color={colors.muted} name="location-outline" size={21} />
+                        <Text style={styles.emptyListText}>
+                          {!token
+                            ? 'Inicia sesión para descubrir cuidadores.'
+                            : mapError || 'No hay cuidadores en esta categoría y radio.'}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                );
+              }
+
+              const onPress = () => {
+                setSelectedCaregiver(item.caregiver);
+                setSheetExpanded(true);
+              };
+              return item.section === 'featured'
+                ? <FeaturedCaregiverCard caregiver={item.caregiver} onPress={onPress} />
+                : <CaregiverListItem caregiver={item.caregiver} onPress={onPress} />;
+            }}
+            showsVerticalScrollIndicator={false}
+            style={styles.caregiverListScroll}
+          />
         )}
       </Animated.View>
     </View>
@@ -388,6 +444,50 @@ function MapAction({
   );
 }
 
+function FeaturedCaregiverCard({
+  caregiver,
+  onPress,
+}: {
+  caregiver: NearbyCaregiver;
+  onPress: () => void;
+}) {
+  const available = caregiver.availabilityTone !== 'amber';
+  return (
+    <Pressable
+      accessibilityLabel={`Ver perfil de ${caregiver.name}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={styles.featuredCard}
+    >
+      <View style={styles.featuredAvatar}>
+        <Image resizeMode="cover" source={{ uri: caregiver.image }} style={styles.featuredAvatarImage} />
+      </View>
+      <View style={styles.featuredInfo}>
+        <View style={styles.featuredNameLine}>
+          <Text numberOfLines={1} style={styles.featuredName}>{caregiver.name}</Text>
+          {caregiver.verified && <Ionicons color={teal} name="checkmark-circle" size={14} />}
+        </View>
+        <Text numberOfLines={1} style={styles.featuredRole}>
+          {caregiver.specialties[0] || caregiver.title}
+        </Text>
+        <View style={styles.featuredMeta}>
+          <View style={[styles.featuredStatus, !available && styles.featuredStatusBusy]}>
+            <View style={[styles.featuredStatusDot, !available && styles.featuredStatusDotBusy]} />
+            <Text style={styles.featuredStatusText}>{available ? 'Disponible' : 'En servicio'}</Text>
+          </View>
+          <View style={styles.featuredRating}>
+            <Star color={colors.secondary} fill={colors.secondary} size={13} strokeWidth={1.8} />
+            <Text style={styles.featuredRatingText}>{caregiver.rating}</Text>
+          </View>
+        </View>
+      </View>
+      <View style={styles.featuredPriceBlock}>
+        <Text style={styles.featuredPrice}>${caregiver.hourlyRate}<Text style={styles.featuredPriceUnit}>/h</Text></Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function CaregiverListItem({ caregiver, onPress }: { caregiver: NearbyCaregiver; onPress: () => void }) {
   const available = caregiver.availabilityTone !== 'amber';
   return (
@@ -400,23 +500,23 @@ function CaregiverListItem({ caregiver, onPress }: { caregiver: NearbyCaregiver;
           <Text numberOfLines={1} style={styles.caregiverName}>{caregiver.name}</Text>
           {caregiver.verified && <Ionicons color={teal} name="checkmark-circle" size={14} />}
           <View style={styles.rating}>
-            <Ionicons color={colors.gold} name="star" size={12} />
+            <Star color={colors.secondary} fill={colors.secondary} size={12} strokeWidth={1.8} />
             <Text style={styles.ratingText}>{caregiver.rating}</Text>
           </View>
         </View>
         <Text numberOfLines={1} style={styles.caregiverTitle}>{caregiver.title}</Text>
         <View style={styles.availabilityLine}>
-          <View style={styles.availabilityTrack}>
-            <View style={[styles.availabilityFill, !available && styles.availabilityFillBusy]} />
+          <View style={[styles.availabilityBadge, !available && styles.availabilityBadgeBusy]}>
+            <View style={[styles.availabilityDot, !available && styles.availabilityDotBusy]} />
+            <Text style={[styles.availabilityText, !available && styles.availabilityTextBusy]}>
+              {available ? 'Disponible ahora' : 'En servicio'}
+            </Text>
           </View>
-          <Text style={[styles.availabilityText, !available && styles.availabilityTextBusy]}>
-            {available ? 'Disponible ahora' : 'En servicio'}
-          </Text>
           <Text style={styles.distanceText}>{caregiver.distance}</Text>
         </View>
       </View>
       <View style={styles.rowAction}>
-        <Ionicons color={teal} name="chevron-forward" size={17} />
+        <ChevronRight color={colors.ink} size={18} strokeWidth={2} />
       </View>
     </Pressable>
   );
@@ -443,7 +543,7 @@ function CaregiverDetail({
           </View>
         </View>
         <View style={styles.ratingPill}>
-          <Ionicons color={colors.gold} name="star" size={13} />
+          <Star color={colors.secondary} fill={colors.secondary} size={13} strokeWidth={1.8} />
           <Text style={styles.ratingPillText}>{caregiver.rating}</Text>
         </View>
       </View>
@@ -456,7 +556,7 @@ function CaregiverDetail({
           </Text>
         </View>
         <View style={styles.detailAvailabilityTrack}>
-          <View style={[styles.detailAvailabilityFill, !available && styles.availabilityFillBusy]} />
+          <View style={[styles.detailAvailabilityFill, !available && styles.detailAvailabilityFillBusy]} />
         </View>
       </View>
 
@@ -484,9 +584,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: colors.white,
     borderColor: colors.line,
-    borderWidth: 1,
     borderRadius: 22,
-    elevation: 5,
+    borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     left: 18,
@@ -495,13 +594,9 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     position: 'absolute',
     right: 18,
-    shadowColor: colors.ink,
-    shadowOffset: { height: 3, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 9,
     top: 10,
   },
-  statusDot: { backgroundColor: colors.gold, borderRadius: 4, height: 8, marginRight: 8, width: 8 },
+  statusDot: { backgroundColor: colors.secondary, borderRadius: 4, height: 8, marginRight: 8, width: 8 },
   statusDotReady: { backgroundColor: teal },
   statusText: { color: colors.ink, flexShrink: 1, fontSize: 11, fontWeight: '700' },
   statusCount: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 10, height: 21, justifyContent: 'center', marginLeft: 8, minWidth: 24, paddingHorizontal: 6 },
@@ -512,19 +607,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.white,
     borderColor: colors.line,
-    borderWidth: 1,
     borderRadius: 18,
-    elevation: 3,
+    borderWidth: 1,
     flexDirection: 'row',
     marginRight: 6,
     paddingHorizontal: 11,
     paddingVertical: 9,
-    shadowColor: colors.ink,
-    shadowOffset: { height: 2, width: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
   },
-  mapFilterActive: { backgroundColor: teal },
+  mapFilterActive: { backgroundColor: teal, borderColor: teal },
   mapFilterText: { color: colors.ink, fontSize: 10, fontWeight: '700', marginLeft: 5 },
   mapFilterTextActive: { color: colors.white },
   mapControls: { alignItems: 'center', position: 'absolute', right: 12, top: 109 },
@@ -534,14 +624,9 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: 14,
     borderWidth: 1,
-    elevation: 4,
     height: 43,
     justifyContent: 'center',
     marginBottom: 9,
-    shadowColor: colors.ink,
-    shadowOffset: { height: 2, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
     width: 43,
   },
   radiusButton: {
@@ -550,14 +635,9 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: 14,
     borderWidth: 1,
-    elevation: 4,
     height: 58,
     justifyContent: 'center',
     marginBottom: 9,
-    shadowColor: colors.ink,
-    shadowOffset: { height: 2, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
     width: 48,
   },
   radiusText: { color: colors.ink, fontSize: 9, fontWeight: '800', marginTop: 2 },
@@ -582,34 +662,56 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     bottom: 0,
-    elevation: 16,
     left: 0,
     overflow: 'hidden',
     paddingHorizontal: 17,
     position: 'absolute',
     right: 0,
-    shadowColor: colors.ink,
-    shadowOffset: { height: -6, width: 0 },
-    shadowOpacity: 0.13,
-    shadowRadius: 16,
   },
   sheetHandleArea: { alignItems: 'center', height: 22, justifyContent: 'center' },
   sheetHandle: { backgroundColor: colors.line, borderRadius: 3, height: 4, width: 38 },
-  sheetHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  discoveryListContent: { paddingBottom: 34 },
+  featuredHeading: { marginBottom: 8, marginTop: 2 },
+  featuredTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  featuredSubtitle: { color: colors.muted, fontSize: 9, marginTop: 2 },
+  featuredCard: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderColor: colors.line,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginBottom: 8,
+    minHeight: 76,
+    padding: 10,
+    width: '100%',
+  },
+  featuredAvatar: { backgroundColor: colors.tealPale, borderRadius: 22, height: 44, overflow: 'hidden', width: 44 },
+  featuredAvatarImage: { height: '100%', width: '100%' },
+  featuredInfo: { flex: 1, marginLeft: 10, minWidth: 0 },
+  featuredStatus: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 11, flexDirection: 'row', paddingHorizontal: 7, paddingVertical: 5 },
+  featuredStatusBusy: { backgroundColor: colors.canvas },
+  featuredStatusDot: { backgroundColor: colors.secondary, borderRadius: 3, height: 6, marginRight: 4, width: 6 },
+  featuredStatusDotBusy: { backgroundColor: colors.line },
+  featuredStatusText: { color: colors.tealDark, fontSize: 8, fontWeight: '700' },
+  featuredNameLine: { alignItems: 'center', flexDirection: 'row', gap: 4, minWidth: 0 },
+  featuredName: { color: colors.ink, flexShrink: 1, fontSize: 11, fontWeight: '800' },
+  featuredRole: { color: colors.muted, fontSize: 9 },
+  featuredMeta: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 7 },
+  featuredRating: { alignItems: 'center', flexDirection: 'row', marginLeft: 7 },
+  featuredRatingText: { color: colors.ink, fontSize: 9, fontWeight: '700', marginLeft: 4 },
+  featuredPriceBlock: { alignItems: 'flex-end', borderLeftColor: colors.line, borderLeftWidth: 1, justifyContent: 'center', marginLeft: 8, minWidth: 54, paddingLeft: 8 },
+  featuredPrice: { color: colors.tealDark, fontSize: 12, fontWeight: '800' },
+  featuredPriceUnit: { color: colors.muted, fontSize: 9, fontWeight: '600' },
+  featuredEmpty: { alignItems: 'center', justifyContent: 'center', marginBottom: 12, paddingHorizontal: 12, paddingVertical: 14 },
+  sheetHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, marginTop: 12 },
   sheetHeadingCopy: { flex: 1 },
-  sheetTitle: { color: colors.tealDark, fontSize: 17, fontWeight: '800', letterSpacing: -0.2 },
+  sheetTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   sheetSubtitle: { color: colors.muted, fontSize: 10, marginTop: 3 },
-  sheetCount: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 13, flexDirection: 'row', paddingHorizontal: 9, paddingVertical: 7 },
-  sheetCountText: { color: teal, fontSize: 10, fontWeight: '800', marginLeft: 5 },
-  sheetFilters: { flexGrow: 0, flexShrink: 0, marginBottom: 4 },
-  sheetFilterContent: { alignItems: 'center', paddingRight: 4 },
-  sheetFilter: { alignItems: 'center', borderColor: colors.line, borderRadius: 14, borderWidth: 1, flexDirection: 'row', marginRight: 6, paddingHorizontal: 9, paddingVertical: 7 },
-  sheetFilterActive: { backgroundColor: colors.tealPale, borderColor: colors.tealDark },
-  sheetFilterText: { color: colors.muted, fontSize: 9, fontWeight: '600', marginLeft: 4 },
-  sheetFilterTextActive: { color: teal, fontWeight: '800' },
-  caregiverListScroll: { flex: 1 },
-  caregiverList: { paddingBottom: 10 },
-  caregiverRow: { alignItems: 'center', borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', minHeight: 77, paddingVertical: 9 },
+  seeAllButton: { alignItems: 'center', flexDirection: 'row', marginLeft: 8, paddingVertical: 6 },
+  seeAllText: { color: colors.secondary, fontSize: 10, fontWeight: '800' },
+  caregiverListScroll: { flex: 1, minHeight: 0 },
+  caregiverRow: { alignItems: 'center', borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', minHeight: 70, paddingVertical: 8 },
   caregiverAvatar: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 23, height: 46, justifyContent: 'center', overflow: 'hidden', width: 46 },
   caregiverAvatarImage: { height: '100%', width: '100%' },
   caregiverInfo: { flex: 1, marginLeft: 10, minWidth: 0 },
@@ -619,12 +721,13 @@ const styles = StyleSheet.create({
   ratingText: { color: colors.ink, fontSize: 10, fontWeight: '700', marginLeft: 3 },
   caregiverTitle: { color: colors.muted, fontSize: 10, marginTop: 3 },
   availabilityLine: { alignItems: 'center', flexDirection: 'row', marginTop: 7 },
-  availabilityTrack: { backgroundColor: colors.line, borderRadius: 3, height: 4, overflow: 'hidden', width: 42 },
-  availabilityFill: { backgroundColor: teal, borderRadius: 3, height: '100%', width: '86%' },
-  availabilityFillBusy: { backgroundColor: colors.gold, width: '48%' },
-  availabilityText: { color: teal, fontSize: 9, fontWeight: '700', marginLeft: 6 },
-  availabilityTextBusy: { color: colors.ink },
-  distanceText: { color: colors.muted, fontSize: 9, marginLeft: 'auto' },
+  availabilityBadge: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 10, flexDirection: 'row', paddingHorizontal: 7, paddingVertical: 4 },
+  availabilityBadgeBusy: { backgroundColor: colors.canvas },
+  availabilityDot: { backgroundColor: colors.secondary, borderRadius: 3, height: 6, marginRight: 4, width: 6 },
+  availabilityDotBusy: { backgroundColor: colors.line },
+  availabilityText: { color: colors.tealDark, fontSize: 8, fontWeight: '700' },
+  availabilityTextBusy: { color: colors.muted },
+  distanceText: { color: colors.line, fontSize: 9, marginLeft: 'auto' },
   rowAction: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 17, height: 34, justifyContent: 'center', marginLeft: 9, width: 34 },
   emptyList: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 20 },
   emptyListText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginLeft: 8, textAlign: 'center' },
@@ -644,6 +747,7 @@ const styles = StyleSheet.create({
   detailAvailabilityText: { color: teal, fontSize: 10, fontWeight: '800' },
   detailAvailabilityTrack: { backgroundColor: colors.line, borderRadius: 4, height: 7, overflow: 'hidden' },
   detailAvailabilityFill: { backgroundColor: teal, borderRadius: 4, height: '100%', width: '86%' },
+  detailAvailabilityFillBusy: { backgroundColor: colors.line, width: '48%' },
   detailLocation: { alignItems: 'center', flexDirection: 'row', marginBottom: 13 },
   detailLocationText: { color: colors.muted, flex: 1, fontSize: 10, marginLeft: 6 },
   detailPrice: { color: colors.ink, fontSize: 15, fontWeight: '800', marginLeft: 8 },
