@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View, type ScrollViewInstance, StyleSheet } from 'react-native';
-import { LocalizedText as Text, LocalizedTextInput as TextInput } from '../components/LocalizedText';
-import { CalendarDays, ChevronRight, LogOut, Settings2, Trash2, UsersRound } from 'lucide-react-native';
-import { deleteServicio, deleteUsuario, getAbuelos, getServicios } from '../api/auth';
-import { CaregiverCard } from '../components/CaregiverCard';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, useWindowDimensions, View, type ScrollViewInstance, StyleSheet } from 'react-native';
+import { LocalizedText as Text } from '../components/LocalizedText';
+import { BadgeCheck, ChevronDown, ChevronRight, LogOut, MapPin, Search, Settings2, Star, Trash2, UsersRound } from 'lucide-react-native';
+import { deleteUsuario } from '../api/auth';
 import { ClientProfileSection } from '../components/ClientProfileSection';
 import { ConsultasChat } from '../components/ConsultasChat';
 import { EditableProfileAvatar } from '../components/EditableProfileAvatar';
@@ -14,7 +13,6 @@ import { FamilyTabKey, TabKey } from '../components/BottomTabBar';
 import { profilePalette, secondaryColors as colors , createThemedStyles} from '../theme';
 import { CareRecipient, Caregiver, Coordinates, Servicio, UserAccount } from '../types';
 import { getCurrentCoordinates } from '../utils/currentServiceLocation';
-import { mapServicio, matchesServicioFilter, matchesServicioSearch, servicioFilters, ServicioFilter } from '../utils/servicio';
 import { filterNearbyCaregivers } from '../utils/nearbyCaregivers';
 import { loadVisibleCaregivers } from '../utils/visibleCaregivers';
 import type { NearbyCaregiver } from '../utils/nearbyCaregivers';
@@ -35,10 +33,12 @@ type Props = {
   onActiveConsultaChange?: (id: number | null) => void;
 };
 
+type CaregiverSort = 'distance' | 'rating' | 'price';
+
 const copy: Record<FamilyTabKey, { title: string; subtitle: string; empty: string }> = {
   care: {
-    title: 'Mis cuidados',
-    subtitle: 'Aquí encontrarás tus solicitudes y servicios.',
+    title: 'Cuidadores',
+    subtitle: 'Encuentra apoyo de confianza cerca de ti.',
     empty: 'Aún no tienes cuidados programados.',
   },
   messages: {
@@ -63,22 +63,20 @@ export function SimpleTabScreen({
   onSaveCareRecipient,
   onDeleteCareRecipient,
   onSelectCaregiver,
-  onEditServicio,
-  servicioRefreshKey,
   activeConsultaId,
   onActiveConsultaChange,
 }: Props) {
   const { language } = useAppSettings();
+  const { width: windowWidth } = useWindowDimensions();
   const content = copy[tab];
   const token = signedInUser?.token;
   const [reference, setReference] = useState<Coordinates | null>(null);
   const [locationChecked, setLocationChecked] = useState(false);
   const [nearbyCaregivers, setNearbyCaregivers] = useState<NearbyCaregiver[]>([]);
+  const [caregiversLoading, setCaregiversLoading] = useState(false);
   const [nearbyError, setNearbyError] = useState('');
-  const [familyServicios, setFamilyServicios] = useState<Servicio[]>([]);
-  const [familyServiciosLoading, setFamilyServiciosLoading] = useState(false);
-  const [servicioFilter, setServicioFilter] = useState<ServicioFilter>('todos');
-  const [servicioSearch, setServicioSearch] = useState('');
+  const [activeSpecialty, setActiveSpecialty] = useState('Todas');
+  const [caregiverSort, setCaregiverSort] = useState<CaregiverSort>('rating');
   const [profileSettingsVisible, setProfileSettingsVisible] = useState(false);
   const profileScrollRef = useRef<ScrollViewInstance | null>(null);
   const familyProfileOffset = useRef(0);
@@ -105,6 +103,7 @@ export function SimpleTabScreen({
     if (tab !== 'care' || !token || !locationChecked) return;
     let active = true;
     const loadCaregivers = async () => {
+      setCaregiversLoading(true);
       try {
         const data = await loadVisibleCaregivers(token);
         if (!active) return;
@@ -115,6 +114,8 @@ export function SimpleTabScreen({
           setNearbyCaregivers([]);
           setNearbyError(e instanceof Error ? e.message : 'No se pudieron cargar cuidadores.');
         }
+      } finally {
+        if (active) setCaregiversLoading(false);
       }
     };
     void loadCaregivers();
@@ -122,47 +123,53 @@ export function SimpleTabScreen({
     return () => { active = false; clearInterval(interval); };
   }, [tab, token, reference, locationChecked]);
 
-  useEffect(() => {
-    if (tab !== 'care' || !token) return;
-    let active = true;
-    const loadServicios = async () => {
-      setFamilyServiciosLoading(true);
-      try {
-        const [servicios, abuelos] = await Promise.all([getServicios(token), getAbuelos(token)]);
-        if (!active) return;
-        const patientIds = new Set(abuelos.map((item) => Number(item.id)).filter((id) => Number.isFinite(id)));
-        setFamilyServicios(
-          servicios
-            .map(mapServicio)
-            .filter((item) => patientIds.has(item.abuelo_id))
-            .sort((a, b) => String(b.creado_en ?? '').localeCompare(String(a.creado_en ?? ''))),
-        );
-      } catch {
-        if (active) setFamilyServicios([]);
-      } finally {
-        if (active) setFamilyServiciosLoading(false);
+  const shownCaregivers = useMemo(
+    () => token ? nearbyCaregivers : [],
+    [nearbyCaregivers, token],
+  );
+  const specialties = useMemo(
+    () => [...new Set(shownCaregivers.flatMap((caregiver) => caregiver.specialties).filter(Boolean))],
+    [shownCaregivers],
+  );
+  const selectedSpecialty = activeSpecialty === 'Todas' || specialties.includes(activeSpecialty)
+    ? activeSpecialty
+    : 'Todas';
+  const directoryHasRatings = shownCaregivers.some((caregiver) =>
+    caregiver.reviews > 0 && Number.parseFloat(caregiver.rating) > 0);
+  const directorySortOptions: CaregiverSort[] = directoryHasRatings
+    ? ['rating', 'distance', 'price']
+    : ['distance', 'price'];
+  const activeDirectorySort = directorySortOptions.includes(caregiverSort)
+    ? caregiverSort
+    : directorySortOptions[0];
+  const directoryCaregivers = useMemo(() => shownCaregivers
+    .filter((caregiver) => selectedSpecialty === 'Todas' || caregiver.specialties.includes(selectedSpecialty))
+    .slice()
+    .sort((a, b) => {
+      if (activeDirectorySort === 'rating') {
+        const ratingDifference = Number.parseFloat(b.rating) - Number.parseFloat(a.rating);
+        if (Number.isFinite(ratingDifference) && ratingDifference !== 0) return ratingDifference;
+        return b.reviews - a.reviews;
       }
-    };
-    void loadServicios();
-    const interval = setInterval(() => { void loadServicios(); }, 30000);
-    return () => { active = false; clearInterval(interval); };
-  }, [tab, token, servicioRefreshKey]);
-
-  const shownServicios = familyServicios
-    .filter((item) => matchesServicioFilter(item, servicioFilter))
-    .filter((item) => matchesServicioSearch(item, servicioSearch));
-
-  const removeServicioRequest = async (id: number) => {
-    if (!token) return;
-    try {
-      await deleteServicio(id, token);
-      setFamilyServicios((current) => current.filter((item) => item.id !== id));
-    } catch (e) {
-      showLocalizedAlert(language, 'No se pudo eliminar', e instanceof Error ? e.message : 'Intenta de nuevo.');
-    }
+      if (activeDirectorySort === 'price') {
+        const aPrice = a.hourlyRate > 0 ? a.hourlyRate : Number.POSITIVE_INFINITY;
+        const bPrice = b.hourlyRate > 0 ? b.hourlyRate : Number.POSITIVE_INFINITY;
+        return aPrice - bPrice;
+      }
+      return (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY);
+    }), [activeDirectorySort, selectedSpecialty, shownCaregivers]);
+  const directoryCardWidth = windowWidth < 360
+    ? windowWidth - 38
+    : Math.max(145, Math.floor((windowWidth - 50) / 2));
+  const directorySortLabel = activeDirectorySort === 'rating'
+    ? 'Mejor valorados'
+    : activeDirectorySort === 'price'
+      ? 'Menor tarifa'
+      : 'Más cercanos';
+  const cycleDirectorySort = () => {
+    const activeIndex = directorySortOptions.indexOf(activeDirectorySort);
+    setCaregiverSort(directorySortOptions[(activeIndex + 1) % directorySortOptions.length]);
   };
-
-  const shownCaregivers = token ? nearbyCaregivers : [];
   const careRecipients = signedInUser?.careRecipients ?? [];
   const recipientNames = careRecipients.slice(0, 2).map((recipient) => recipient.name).filter(Boolean);
   const recipientSummary = recipientNames.length
@@ -301,8 +308,8 @@ export function SimpleTabScreen({
               <View style={styles.familyActions}>
                 <Pressable accessibilityRole="button" onPress={() => onSelectTab('care')} style={[styles.familyAction, styles.familyActionLast]}>
                   <View style={styles.familyActionLeading}>
-                    <CalendarDays color={profilePalette.primary} size={18} strokeWidth={1.8} />
-                    <Text style={styles.familyActionText}>Mis solicitudes y servicios</Text>
+                    <Search color={profilePalette.primary} size={18} strokeWidth={1.8} />
+                    <Text style={styles.familyActionText}>Buscar cuidadores</Text>
                   </View>
                   <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
                 </Pressable>
@@ -389,7 +396,7 @@ export function SimpleTabScreen({
             </Pressable>
           </View>
         )
-        ) : tab === 'care' && familyServicios.length > 0 ? null : (
+        ) : tab === 'care' ? null : (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyIcon}>{tab === 'care' ? '▣' : '○'}</Text>
           <Text style={styles.emptyTitle}>{content.empty}</Text>
@@ -405,74 +412,76 @@ export function SimpleTabScreen({
       )}
 
       {tab === 'care' && (
-        <View style={styles.suggestions}>
-          <Text style={styles.suggestionTitle}>Mis solicitudes</Text>
-          <TextInput
-            onChangeText={setServicioSearch}
-            placeholder="Buscar por paciente, cuidador, nota o ID"
-            placeholderTextColor={colors.line}
-            style={styles.serviceSearch}
-            value={servicioSearch}
-          />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.serviceFilters}>
-            {servicioFilters.map((filter) => (
+        <View style={styles.searchDirectory}>
+          <View style={styles.specialtyFilters}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {['Todas', ...specialties].map((specialty) => (
               <Pressable
-                key={filter.key}
-                onPress={() => setServicioFilter(filter.key)}
-                style={[styles.serviceFilterChip, servicioFilter === filter.key && styles.serviceFilterChipActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: selectedSpecialty === specialty }}
+                key={specialty}
+                onPress={() => setActiveSpecialty(specialty)}
+                style={[styles.specialtyChip, selectedSpecialty === specialty && styles.specialtyChipActive]}
               >
-                <Text style={[styles.serviceFilterText, servicioFilter === filter.key && styles.serviceFilterTextActive]}>{filter.label}</Text>
+                <Text style={[styles.specialtyChipText, selectedSpecialty === specialty && styles.specialtyChipTextActive]}>
+                  {specialty}
+                </Text>
               </Pressable>
-            ))}
-          </ScrollView>
-          {familyServiciosLoading && <ActivityIndicator color={colors.tealDark} style={{ marginBottom: 10 }} />}
-          {!familyServiciosLoading && familyServicios.length === 0 && (
-            <Text style={styles.suggestionInfo}>Todavía no has solicitado servicios.</Text>
-          )}
-          {!familyServiciosLoading && familyServicios.length > 0 && shownServicios.length === 0 && (
-            <Text style={styles.suggestionInfo}>No hay servicios con ese filtro o búsqueda.</Text>
-          )}
-          {shownServicios.map((servicio) => (
-            <View key={servicio.id} style={styles.serviceCard}>
-              <View style={styles.serviceTopLine}>
-                <Text style={styles.serviceTitle}>{servicio.abuelo_nombre ?? `Paciente ${servicio.abuelo_id}`}</Text>
-                <Text style={styles.serviceStatus}>{servicio.estado}</Text>
-              </View>
-              <Text style={styles.serviceInfo}>Cuidador: {servicio.cuidador_nombre ?? `#${servicio.cuidador_id}`}</Text>
-              <Text style={styles.serviceInfo}>{servicio.inicio} → {servicio.fin}</Text>
-              <Text style={styles.serviceNote}>{servicio.nota || 'Sin nota'}</Text>
-              <Text style={styles.serviceMeta}>
-                ${servicio.total} · Pago: {servicio.estado_pago} · Familiar: {servicio.aceptado_por_familiar ? 'aceptó' : 'pendiente'} · Cuidador: {servicio.aceptado_por_cuidador ? 'aceptó' : 'pendiente'}
-              </Text>
-              <View style={styles.serviceActions}>
-                <Pressable onPress={() => onEditServicio(servicio)} style={styles.serviceAction}><Text style={styles.serviceActionText}>Editar</Text></Pressable>
-                <Pressable onPress={() => void removeServicioRequest(servicio.id)} style={[styles.serviceAction, styles.serviceActionDanger]}><Text style={styles.serviceActionDangerText}>Eliminar</Text></Pressable>
-              </View>
-            </View>
-          ))}
-          <Text style={[styles.suggestionTitle, { marginTop: 14 }]}>Cuidadores cerca de ti</Text>
-          <Text style={styles.suggestionInfo}>
-            {reference
-              ? 'Ordenados por distancia desde tu ubicación'
-              : 'Ubicación desactivada · se muestran todos'}
-          </Text>
-          {!token && <Text style={styles.suggestionInfo}>Inicia sesión para ver cuidadores disponibles.</Text>}
-          {!!nearbyError && <Text style={styles.suggestionError}>{nearbyError}</Text>}
-          {shownCaregivers.map((caregiver) => (
-            <CaregiverCard
-              key={caregiver.id}
-              caregiver={caregiver}
-              compact
-              onPress={() => onSelectCaregiver(caregiver)}
-            />
-          ))}
-          {locationChecked && !!token && !nearbyError && shownCaregivers.length === 0 && (
-            <Text style={styles.suggestionInfo}>
-              {reference
-                  ? 'No hay cuidadores activos. Deben tener el switch de disponible encendido y ubicación reciente.'
-                  : 'No hay cuidadores activos en el mapa. Activa la ubicación para ordenar por cercanía.'}
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={styles.directorySortRow}>
+            <Text style={styles.directoryResultCount}>
+              {directoryCaregivers.length} {directoryCaregivers.length === 1 ? 'cuidador' : 'cuidadores'}
             </Text>
+            <Pressable
+              accessibilityLabel={`Ordenar por ${directorySortLabel}`}
+              accessibilityRole="button"
+              onPress={cycleDirectorySort}
+              style={styles.directorySortButton}
+            >
+              <Text style={styles.directorySortHint}>Ordenar</Text>
+              <Text style={styles.directorySortText}>{directorySortLabel}</Text>
+              <ChevronDown color={colors.teal} size={15} strokeWidth={2} />
+            </Pressable>
+          </View>
+
+          {!token ? (
+            <View style={styles.directoryEmpty}>
+              <Text style={styles.directoryEmptyTitle}>Inicia sesión para ver cuidadores</Text>
+              <Pressable onPress={() => onOpenAuth('login')} style={styles.directoryActionButton}>
+                <Text style={styles.directoryActionText}>Iniciar sesión</Text>
+              </Pressable>
+            </View>
+          ) : caregiversLoading && shownCaregivers.length === 0 ? (
+            <ActivityIndicator color={colors.teal} style={styles.directoryLoading} />
+          ) : nearbyError ? (
+            <Text accessibilityRole="alert" style={styles.suggestionError}>{nearbyError}</Text>
+          ) : directoryCaregivers.length === 0 ? (
+            <View style={styles.directoryEmpty}>
+              <Text style={styles.directoryEmptyTitle}>
+                {shownCaregivers.length
+                  ? 'No hay cuidadores en esta especialidad.'
+                  : 'No hay cuidadores disponibles en tu zona por el momento.'}
+              </Text>
+              {!!reference && (
+                <Text style={styles.suggestionInfo}>La lista se ordena según tu ubicación actual.</Text>
+              )}
+            </View>
+          ) : (
+            <View style={styles.caregiverGrid}>
+              {directoryCaregivers.map((caregiver) => (
+                <DirectoryCaregiverCard
+                  caregiver={caregiver}
+                  key={caregiver.id}
+                  onPress={() => onSelectCaregiver(caregiver)}
+                  width={directoryCardWidth}
+                />
+              ))}
+            </View>
           )}
+
         </View>
       )}
       {tab === 'account' && signedInUser && (
@@ -503,6 +512,75 @@ export function SimpleTabScreen({
         />
       )}
     </ScrollView>
+  );
+}
+
+function DirectoryCaregiverCard({
+  caregiver,
+  width,
+  onPress,
+}: {
+  caregiver: NearbyCaregiver;
+  width: number;
+  onPress: () => void;
+}) {
+  const initials = caregiver.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join('')
+    .toUpperCase();
+  const hasRating = caregiver.reviews > 0 && Number.parseFloat(caregiver.rating) > 0;
+
+  return (
+    <Pressable
+      accessibilityLabel={`Ver perfil de ${caregiver.name}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.directoryCard, { width }, pressed && styles.directoryCardPressed]}
+    >
+      <View style={styles.directoryPhoto}>
+        <Text style={styles.directoryInitials}>{initials || 'C'}</Text>
+        {caregiver.verified && (
+          <View style={styles.directoryVerified}>
+            <BadgeCheck color={colors.teal} size={19} strokeWidth={2} />
+          </View>
+        )}
+      </View>
+      <View style={styles.directoryCardBody}>
+        <Text numberOfLines={1} style={styles.directoryName}>{caregiver.name}</Text>
+        <Text numberOfLines={1} style={styles.directoryRole}>
+          {caregiver.specialties[0] || caregiver.title}
+        </Text>
+        <View style={styles.directoryLocation}>
+          <MapPin color={colors.muted} size={12} strokeWidth={1.8} />
+          <Text numberOfLines={1} style={styles.directoryLocationText}>
+            {caregiver.location === 'Zona de servicio' ? caregiver.distance : caregiver.location}
+          </Text>
+        </View>
+        <View style={styles.directoryCardFooter}>
+          {caregiver.hourlyRate > 0 ? (
+            <Text style={styles.directoryPrice}>
+              ${caregiver.hourlyRate}<Text style={styles.directoryPriceUnit}> / h</Text>
+            </Text>
+          ) : <View />}
+          {hasRating ? (
+            <View style={styles.directoryRating}>
+              <Star color={colors.teal} fill={colors.teal} size={12} strokeWidth={1.7} />
+              <Text style={styles.directoryRatingText}>
+                {caregiver.rating} <Text style={styles.directoryReviews}>({caregiver.reviews})</Text>
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.directoryAvailability}>
+              <View style={[styles.directoryAvailabilityDot, caregiver.availabilityTone === 'amber' && styles.directoryAvailabilityBusy]} />
+              <Text numberOfLines={1} style={styles.directoryAvailabilityText}>{caregiver.availability}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -634,26 +712,43 @@ const styles = createThemedStyles(() => StyleSheet.create({
   emptyCard: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 18, marginTop: 25, padding: 22 },
   emptyIcon: { color: colors.teal, fontSize: 31 },
   emptyTitle: { color: colors.tealDark, fontSize: 14, fontWeight: '800', marginTop: 10, textAlign: 'center' },
-  suggestions: { marginTop: 23 },
-  suggestionTitle: { color: colors.tealDark, fontSize: 14, fontWeight: '800', marginBottom: 4 },
-  serviceSearch: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 11, borderWidth: 1, color: colors.ink, fontSize: 11, marginBottom: 9, paddingHorizontal: 11, paddingVertical: 9 },
-  serviceFilters: { flexGrow: 0, marginBottom: 10 },
-  serviceFilterChip: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginRight: 7, paddingHorizontal: 11, paddingVertical: 7 },
-  serviceFilterChipActive: { backgroundColor: colors.teal, borderColor: colors.tealDark },
-  serviceFilterText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
-  serviceFilterTextActive: { color: colors.white },
-  serviceCard: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: 9, padding: 14 },
-  serviceTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  serviceTitle: { color: colors.tealDark, flex: 1, fontSize: 12, fontWeight: '800' },
-  serviceStatus: { backgroundColor: colors.highlightSoft, borderRadius: 9, color: colors.ink, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
-  serviceInfo: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 5 },
-  serviceNote: { color: colors.ink, fontSize: 10, lineHeight: 14, marginTop: 7 },
-  serviceMeta: { color: colors.tealDark, fontSize: 9, lineHeight: 13, marginTop: 7 },
-  serviceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 9 },
-  serviceAction: { backgroundColor: colors.tealPale, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7 },
-  serviceActionText: { color: colors.tealDark, fontSize: 9, fontWeight: '800' },
-  serviceActionDanger: { backgroundColor: colors.tealPale },
-  serviceActionDangerText: { color: colors.accent, fontSize: 9, fontWeight: '800' },
+  searchDirectory: { marginTop: 19 },
+  specialtyFilters: { marginHorizontal: -2 },
+  specialtyChip: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 17, borderWidth: 1, marginRight: 8, minHeight: 34, justifyContent: 'center', paddingHorizontal: 13 },
+  specialtyChipActive: { backgroundColor: colors.teal, borderColor: colors.teal },
+  specialtyChipText: { color: colors.ink, fontSize: 10, fontWeight: '700' },
+  specialtyChipTextActive: { color: colors.white },
+  directorySortRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 11, marginTop: 14 },
+  directoryResultCount: { color: colors.muted, fontSize: 10, fontWeight: '600' },
+  directorySortButton: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 5, minHeight: 34, paddingHorizontal: 10 },
+  directorySortHint: { color: colors.muted, fontSize: 9 },
+  directorySortText: { color: colors.ink, fontSize: 10, fontWeight: '700' },
+  caregiverGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
+  directoryCard: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 17, borderWidth: 1, marginBottom: 1, overflow: 'hidden' },
+  directoryCardPressed: { opacity: 0.78 },
+  directoryPhoto: { alignItems: 'center', backgroundColor: colors.tealPale, height: 132, justifyContent: 'center', position: 'relative' },
+  directoryInitials: { color: colors.teal, fontSize: 34, fontWeight: '800' },
+  directoryVerified: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 14, height: 28, justifyContent: 'center', position: 'absolute', right: 9, top: 9, width: 28 },
+  directoryCardBody: { paddingHorizontal: 11, paddingBottom: 12, paddingTop: 10 },
+  directoryName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  directoryRole: { color: colors.muted, fontSize: 9, marginTop: 4 },
+  directoryLocation: { alignItems: 'center', flexDirection: 'row', gap: 4, marginTop: 7 },
+  directoryLocationText: { color: colors.muted, flex: 1, fontSize: 9 },
+  directoryCardFooter: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, minHeight: 20 },
+  directoryPrice: { color: colors.teal, fontSize: 13, fontWeight: '800' },
+  directoryPriceUnit: { color: colors.muted, fontSize: 9, fontWeight: '500' },
+  directoryRating: { alignItems: 'center', flexDirection: 'row', gap: 3 },
+  directoryRatingText: { color: colors.ink, fontSize: 9, fontWeight: '700' },
+  directoryReviews: { color: colors.muted, fontSize: 8, fontWeight: '500' },
+  directoryAvailability: { alignItems: 'center', flexDirection: 'row', gap: 5, maxWidth: '75%' },
+  directoryAvailabilityDot: { backgroundColor: colors.secondary, borderRadius: 4, height: 7, width: 7 },
+  directoryAvailabilityBusy: { backgroundColor: colors.line },
+  directoryAvailabilityText: { color: colors.muted, fontSize: 8, fontWeight: '600' },
+  directoryLoading: { marginVertical: 28 },
+  directoryEmpty: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginBottom: 10, paddingHorizontal: 18, paddingVertical: 22 },
+  directoryEmptyTitle: { color: colors.ink, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  directoryActionButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 12, marginTop: 14, minHeight: 40, justifyContent: 'center', paddingHorizontal: 18 },
+  directoryActionText: { color: colors.white, fontSize: 11, fontWeight: '700' },
   suggestionInfo: { color: colors.muted, fontSize: 11, lineHeight: 16, marginBottom: 10 },
   suggestionError: { color: colors.accent, fontSize: 11, lineHeight: 16, marginBottom: 10 },
 }));

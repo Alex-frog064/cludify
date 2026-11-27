@@ -13,6 +13,7 @@ const english: Record<string, string> = {
   'Aún no hay mensajes': 'No messages yet',
   'Aún no tienes conversaciones': 'You have no conversations yet',
   'Busca, acepta o rechaza las solicitudes de las familias.': 'Find, accept, or decline requests from families.',
+  'Buscar cuidadores': 'Find caregivers',
   'Buscar en mapa': 'Search on map',
   'CUIDADO QUE CONECTA': 'CARE THAT CONNECTS',
   'Calif.': 'Rating',

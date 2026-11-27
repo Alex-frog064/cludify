@@ -313,6 +313,12 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
     setServiciosLoading(true);
     setServicioError('');
     try {
+      const cuidadorId = user.caregiverProfile?.apiId;
+      if (!cuidadorId) {
+        setServicios([]);
+        setServicioError('No se encontró tu perfil de cuidador en el servidor.');
+        return;
+      }
       const [data, abuelos] = await Promise.all([
         getServicios(user.token),
         getAbuelos(user.token).catch(() => [] as Record<string, unknown>[]),
@@ -322,7 +328,6 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
         const id = Number(item.id);
         if (id) patientNames.set(id, String(item.nombre ?? `Paciente ${id}`));
       });
-      const cuidadorId = user.caregiverProfile?.apiId ?? user.id;
       const mine = data
         .map(mapServicio)
         .filter((r) => r.cuidador_id === cuidadorId)
@@ -410,7 +415,9 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
         });
 
         servicios
-          .filter((item) => Number(item.cuidador_id) === (user.caregiverProfile?.apiId ?? user.id))
+          .filter((item) =>
+            user.caregiverProfile?.apiId != null &&
+            Number(item.cuidador_id) === user.caregiverProfile.apiId)
           .forEach((item) => {
             const abueloId = Number(item.abuelo_id);
             const nombre = patientNames.get(abueloId) ?? String(item.abuelos && typeof item.abuelos === 'object' && 'nombre' in item.abuelos ? String(item.abuelos.nombre) : `Paciente ${abueloId}`);
@@ -591,7 +598,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
 
       {tab === 'clients' && (
         <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false} style={styles.contentScroll}>
-          <Text style={styles.pageTitle}>Servicios</Text>
+          <Text style={styles.pageTitle}>Mis solicitudes</Text>
           <Text style={styles.subtitle}>Busca, acepta o rechaza las solicitudes de las familias.</Text>
           <TextInput
             onChangeText={setServicioSearch}
