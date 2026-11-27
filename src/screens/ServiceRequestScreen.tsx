@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text, LocalizedTextInput as TextInput } from '../components/LocalizedText';
 import { createServicio, getAbuelos, updateServicio } from '../api/auth';
-import { colors } from '../theme';
+import { colors , createThemedStyles} from '../theme';
 import type { Caregiver, Servicio } from '../types';
 import { mapServicio } from '../utils/servicio';
 
@@ -227,20 +228,20 @@ export function ServiceRequestScreen({ caregiver, servicio, token, onBack, onCre
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   scrollView: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 52, paddingBottom: 24 },
-  backButton: { backgroundColor: colors.white, borderRadius: 20, height: 38, justifyContent: 'center', position: 'absolute', left: 18, top: 12, width: 38 },
+  backButton: { backgroundColor: colors.surface, borderRadius: 20, height: 38, justifyContent: 'center', position: 'absolute', left: 18, top: 12, width: 38 },
   backText: { color: colors.ink, fontSize: 30, lineHeight: 34, marginLeft: 11, marginTop: -3 },
   eyebrow: { color: colors.tealDark, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   title: { color: colors.tealDark, fontSize: 24, fontWeight: '800', marginTop: 6 },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 5 },
-  section: { backgroundColor: colors.white, borderRadius: 18, marginTop: 18, padding: 14 },
+  section: { backgroundColor: colors.surface, borderRadius: 18, marginTop: 18, padding: 14 },
   sectionTitle: { color: colors.tealDark, fontSize: 13, fontWeight: '800', marginBottom: 10 },
   patientCard: { alignItems: 'center', backgroundColor: colors.canvas, borderRadius: 13, flexDirection: 'row', marginBottom: 8, padding: 10 },
   selectedPatientCard: { backgroundColor: colors.tealPale, borderColor: colors.tealDark, borderWidth: 1 },
-  patientAvatar: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
+  patientAvatar: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
   patientAvatarText: { color: colors.white, fontSize: 14, fontWeight: '800' },
   patientName: { color: colors.ink, flex: 1, fontSize: 12, fontWeight: '700', marginLeft: 10 },
   patientId: { color: colors.muted, fontSize: 9 },
@@ -257,8 +258,8 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.ink, fontSize: 11, fontWeight: '700' },
   summaryTotal: { color: colors.tealDark, fontSize: 14, fontWeight: '800' },
   error: { color: colors.tealDark, fontSize: 11, lineHeight: 16, marginTop: 14 },
-  bottom: { backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10 },
-  submitButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 14, justifyContent: 'center', paddingVertical: 14 },
+  bottom: { backgroundColor: colors.surface, borderTopColor: colors.line, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10 },
+  submitButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 14, justifyContent: 'center', paddingVertical: 14 },
   submitButtonDisabled: { opacity: 0.5 },
   submitText: { color: colors.white, fontSize: 13, fontWeight: '800' },
-});
+}));

@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text } from './LocalizedText';
 import { Caregiver } from '../types';
-import { secondaryColors as colors } from '../theme';
+import { secondaryColors as colors , createThemedStyles} from '../theme';
 
 type Props = {
   caregiver: Caregiver;
@@ -41,10 +42,10 @@ export function CaregiverCard({ caregiver, onPress, compact = false }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   card: {
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderColor: colors.line,
     borderRadius: 22,
     borderWidth: 1,
@@ -73,4 +74,4 @@ const styles = StyleSheet.create({
   price: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   priceUnit: { color: colors.muted, fontSize: 8, marginTop: 2 },
   chevron: { marginTop: 5 },
-});
+}));

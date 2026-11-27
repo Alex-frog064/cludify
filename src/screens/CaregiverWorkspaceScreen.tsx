@@ -1,27 +1,18 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { ChevronRight, Clock3, ShieldCheck, UserRound } from 'lucide-react-native';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Bell, CalendarDays, ChevronRight, Clock3, LogOut, MapPin, Settings2, ShieldCheck, Trash2, UserRound } from 'lucide-react-native';
+import { ActivityIndicator,  Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View, type ScrollViewInstance, StyleSheet } from 'react-native';
+import { LocalizedText as Text, LocalizedTextInput as TextInput } from '../components/LocalizedText';
 import { CaregiverTabKey, TabKey } from '../components/BottomTabBar';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { ConsultasChat } from '../components/ConsultasChat';
 import { EditableProfileAvatar } from '../components/EditableProfileAvatar';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
+import { ProfileScreen } from './ProfileScreen';
+import { useAppSettings } from '../context/AppSettingsContext';
+import { showLocalizedAlert } from '../utils/localizedAlert';
 import { aceptarServicio, deleteCuidador, deleteServicio, deleteUsuario, getAbuelos, getConsultas, getCuidadores, getMensajesConsulta, getServicios, subirDocumentosVerificacion, updateCuidador, updateCuidadorDisponible, updateServicio, updateUsuario } from '../api/auth';
-import { secondaryColors as colors } from '../theme';
+import { profilePalette, secondaryColors as colors , createThemedStyles} from '../theme';
 import { getCurrentServiceLocation } from '../utils/currentServiceLocation';
 import { mapServicio, matchesServicioFilter, matchesServicioSearch, servicioFilters, ServicioFilter } from '../utils/servicio';
 import { Coordinates, Servicio, UserAccount } from '../types';
@@ -89,6 +80,7 @@ function formatServiceDate(value?: string | null) {
 }
 
 export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocation, onUpdateUser, onSignOut, onOpenConsulta, onOpenPaciente, onOpenClient, activeUntil, onAvailabilityChange }: Props) {
+  const { language } = useAppSettings();
   const [selectedCategory, setSelectedCategory] = useState<NotificationCategory>('Todas');
   const [readNotifications, setReadNotifications] = useState<string[]>([]);
   const [realNotifications, setRealNotifications] = useState<NotificationItem[]>([]);
@@ -104,9 +96,12 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
   const [servicioFilter, setServicioFilter] = useState<ServicioFilter>('todos');
   const [servicioSearch, setServicioSearch] = useState('');
   const [profileEditing, setProfileEditing] = useState(false);
+  const [profileSettingsVisible, setProfileSettingsVisible] = useState(false);
   const [profileConfirmation, setProfileConfirmation] = useState<ProfileConfirmation | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const profileScrollRef = useRef<ScrollViewInstance | null>(null);
+  const locationSectionOffset = useRef(0);
   const [ineUri, setIneUri] = useState<string | null>(null);
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [verificationSaving, setVerificationSaving] = useState(false);
@@ -124,6 +119,17 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
     specialties: (user.caregiverProfile?.specialties ?? []).join(', '),
     disponible: !!user.caregiverProfile?.disponible,
   });
+
+  const openLocationSettings = () => {
+    profileScrollRef.current?.scrollTo({ y: locationSectionOffset.current, animated: true });
+  };
+
+  const confirmSignOut = () => {
+    showLocalizedAlert(language, 'Cerrar sesión', '¿Quieres cerrar tu sesión?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Cerrar sesión', style: 'destructive', onPress: onSignOut },
+    ]);
+  };
 
 
   const pickVerificationImage = async (kind: 'ine' | 'selfie', source: 'camera' | 'library') => {
@@ -148,7 +154,8 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
   };
 
   const askVerificationImage = (kind: 'ine' | 'selfie') => {
-    Alert.alert(
+    showLocalizedAlert(
+      language,
       kind === 'ine' ? 'Foto de tu INE' : 'Foto de tu selfie',
       'Elige cómo quieres agregar la imagen.',
       [
@@ -179,7 +186,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
         user.token,
       );
       setVerificationSent(true);
-      Alert.alert('Documentos enviados', 'Tu verificación quedó en revisión. No podrás activarte hasta que sea aprobada.');
+      showLocalizedAlert(language, 'Documentos enviados', 'Tu verificación quedó en revisión. No podrás activarte hasta que sea aprobada.');
     } catch (e) {
       setVerificationError(e instanceof Error ? e.message : 'No se pudieron subir los documentos.');
     } finally {
@@ -445,7 +452,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
       await aceptarServicio(id, user.token);
       await loadServicios();
       setNotificationsRefreshKey((key) => key + 1);
-      Alert.alert('Servicio aceptado', 'El chat de la cita ya está disponible para ambas partes.');
+      showLocalizedAlert(language, 'Servicio aceptado', 'El chat de la cita ya está disponible para ambas partes.');
     } catch (e) {
       setServicioError(e instanceof Error ? e.message : 'No se pudo aceptar el servicio.');
     }
@@ -457,7 +464,7 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
       await updateServicio(id, { estado: 'cancelado' }, user.token);
       await loadServicios();
       setNotificationsRefreshKey((key) => key + 1);
-      Alert.alert('Servicio rechazado', 'La solicitud quedó cancelada.');
+      showLocalizedAlert(language, 'Servicio rechazado', 'La solicitud quedó cancelada.');
     } catch (e) {
       setServicioError(e instanceof Error ? e.message : 'No se pudo rechazar el servicio.');
     }
@@ -643,102 +650,128 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
       )}
 
       {tab === 'profile' && user.caregiverProfile && (
-        <ScrollView contentContainerStyle={styles.profilePage} showsVerticalScrollIndicator={false} style={styles.contentScroll}>
+        <ScrollView ref={profileScrollRef} contentContainerStyle={styles.profilePage} showsVerticalScrollIndicator={false} style={styles.contentScroll}>
+          <View style={styles.profileScreenHeader}>
+            <Text style={styles.profileScreenTitle}>Perfil</Text>
+          </View>
           <View style={styles.profileHero}>
-            <View style={styles.profileTopLine}>
-              <View style={[styles.profileCheckBadge, user.caregiverProfile.verificado && styles.profileCheckBadgeVerified]}>
-                {user.caregiverProfile.verificado ? (
-                  <ShieldCheck color={colors.accent} size={21} strokeWidth={2} />
-                ) : (
-                  <Clock3 color={colors.muted} size={21} strokeWidth={2} />
-                )}
-              </View>
-            </View>
-            <View style={styles.profilePortrait}>
+            <View style={styles.profileIdentityRow}>
               <EditableProfileAvatar
                 uri={user.profilePhotoUri}
                 name={user.name}
-                size={108}
+                size={72}
                 onChange={(uri) => onUpdateUser((current) =>
                   current && current.email === user.email ? { ...current, profilePhotoUri: uri } : current)}
               />
+              <View style={styles.profileIdentityCopy}>
+                <Text style={styles.profileDisplayName}>{user.name}</Text>
+                <Text style={styles.profileDisplaySubtitle}>{user.caregiverProfile.professionalTitle || 'Cuidador profesional'}</Text>
+                <Text numberOfLines={1} style={styles.profileContact}>{user.email}</Text>
+                {!!user.phone && <Text style={styles.profileContact}>{user.phone}</Text>}
+                <View style={styles.profileBadges}>
+                  <View style={styles.profileRoleBadge}>
+                    <Text style={styles.profileRoleBadgeText}>Cuidador</Text>
+                  </View>
+                  <View style={[styles.profileVerificationBadge, user.caregiverProfile.verificado && styles.profileVerificationBadgeVerified]}>
+                    {user.caregiverProfile.verificado ? (
+                      <ShieldCheck color={profilePalette.primary} size={14} strokeWidth={1.8} />
+                    ) : (
+                      <Clock3 color={profilePalette.secondary} size={14} strokeWidth={1.8} />
+                    )}
+                    <Text style={styles.profileVerificationBadgeText}>
+                      {user.caregiverProfile.verificado ? 'Verificado' : 'Pendiente'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
-            <View style={styles.profileSummaryCard}>
-              <View style={styles.profileNameLine}>
-                <View style={styles.profileNameCopy}>
-                  <Text style={styles.profileDisplayName}>{user.name}</Text>
-                  <Text style={styles.profileDisplaySubtitle}>{user.caregiverProfile.professionalTitle || 'Cuidador profesional'}</Text>
-                </View>
-                <View style={[styles.profileRoleBadge, user.caregiverProfile.verificado && styles.profileRoleBadgeVerified]}>
-                  <Text style={[styles.profileRoleBadgeText, user.caregiverProfile.verificado && styles.profileRoleBadgeTextVerified]}>
-                    {user.caregiverProfile.verificado ? 'Verificado' : 'Cuidador'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.profileStats}>
-                <ProfileStat value={`${user.caregiverProfile.yearsExperience}`} label="Años exp." />
-                <View style={styles.profileStatDivider} />
-                <ProfileStat value={`$${user.caregiverProfile.hourlyRate}`} label="MXN / hora" />
-                <View style={styles.profileStatDivider} />
-                <ProfileStat value={`${user.caregiverProfile.specialties.length}`} label="Especialidades" />
-              </View>
-              <View style={styles.profileAvailability}>
-                <View style={[styles.profileAvailabilityDot, profileDraft.disponible && user.caregiverProfile.verificado && styles.profileAvailabilityDotOn]} />
-                <View style={styles.profileAvailabilityCopy}>
-                  <Text style={styles.profileAvailabilityTitle}>
-                    {profileDraft.disponible && user.caregiverProfile.verificado ? 'Disponible para recibir servicios' : 'No disponible'}
-                  </Text>
-                  <Text style={styles.profileAvailabilityHint}>
-                    {!user.caregiverProfile.verificado
-                      ? 'Completa tu verificación para activarte'
-                      : profileDraft.disponible && activeUntil
-                        ? 'Apareces en el mapa y cercanos · se desactiva a los 30 minutos'
-                        : 'Enciéndelo para aparecer en el mapa y en cercanos'}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: profileDraft.disponible && !!user.caregiverProfile.verificado }}
-                  onPress={() => {
-                    if (!user.caregiverProfile?.verificado) {
-                      Alert.alert(
-                        'Verificación requerida',
-                        'No puedes estar activo si tu cuenta no está verificada. Sube tu INE y selfie en esta misma pantalla.',
-                      );
-                      return;
-                    }
-                      const next = !profileDraft.disponible;
-                      setProfileDraft((d) => ({ ...d, disponible: next }));
-                      onUpdateUser({ ...user, caregiverProfile: { ...user.caregiverProfile!, disponible: next } });
-                      onAvailabilityChange?.(next);
-                      if (!user.caregiverProfile?.apiId) return;
-                      setProfileError('');
-                      void (async () => {
-                        try { await updateCuidadorDisponible(user.caregiverProfile!.apiId!, next, user.token); }
-                        catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar disponibilidad, se reintentará al guardar.'); }
-                      })();
-                  }}
-                  style={[styles.switchTrack, profileDraft.disponible && styles.switchTrackOn, !user.caregiverProfile.verificado && styles.switchTrackDisabled]}
-                >
-                  <View style={[styles.switchThumb, profileDraft.disponible && styles.switchThumbOn]} />
-                </Pressable>
-              </View>
-              {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
+            <View style={styles.profileStats}>
+              <ProfileStat value={`${user.caregiverProfile.yearsExperience}`} label="Años exp." />
+              <View style={styles.profileStatDivider} />
+              <ProfileStat value={`$${user.caregiverProfile.hourlyRate}`} label="MXN / hora" />
+              <View style={styles.profileStatDivider} />
+              <ProfileStat value={`${user.caregiverProfile.specialties.length}`} label="Especialidades" />
             </View>
+            <Text style={styles.profileSchedule}>
+              Disponibilidad: {user.caregiverProfile.availability.days.join(', ') || 'Por definir'}
+            </Text>
+            <View style={styles.profileIdentityDetails}>
+              <View style={styles.profileIdentityDetail}>
+                <Text style={styles.profileIdentityLabel}>Cédula</Text>
+                <Text style={styles.profileIdentityValue}>{user.caregiverProfile.identificationNumber || 'Sin registrar'}</Text>
+              </View>
+              <View style={styles.profileIdentityDetail}>
+                <Text style={styles.profileIdentityLabel}>RFC</Text>
+                <Text style={styles.profileIdentityValue}>{user.caregiverProfile.rfc || 'Sin registrar'}</Text>
+              </View>
+            </View>
+            {!!user.caregiverProfile.description && (
+              <Text style={styles.caregiverProfileDescription}>{user.caregiverProfile.description}</Text>
+            )}
+            {!!user.caregiverProfile.specialties.length && (
+              <View style={styles.specialties}>
+                {user.caregiverProfile.specialties.map((specialty, index) => (
+                  <Text key={`${specialty}-${index}`} style={styles.specialtyChip}>{specialty}</Text>
+                ))}
+              </View>
+            )}
+            <View style={styles.profileAvailability}>
+              <View style={[styles.profileAvailabilityDot, profileDraft.disponible && user.caregiverProfile.verificado && styles.profileAvailabilityDotOn]} />
+              <View style={styles.profileAvailabilityCopy}>
+                <Text style={styles.profileAvailabilityTitle}>
+                  {profileDraft.disponible && user.caregiverProfile.verificado ? 'Disponible para recibir servicios' : 'No disponible'}
+                </Text>
+                <Text style={styles.profileAvailabilityHint}>
+                  {!user.caregiverProfile.verificado
+                    ? 'Completa tu verificación para activarte'
+                    : profileDraft.disponible && activeUntil
+                      ? 'Apareces en el mapa y cercanos · se desactiva a los 30 minutos'
+                      : 'Enciéndelo para aparecer en el mapa y en cercanos'}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: profileDraft.disponible && !!user.caregiverProfile.verificado }}
+                onPress={() => {
+                  if (!user.caregiverProfile?.verificado) {
+                    showLocalizedAlert(
+                      language,
+                      'Verificación requerida',
+                      'No puedes estar activo si tu cuenta no está verificada. Sube tu INE y selfie en esta misma pantalla.',
+                    );
+                    return;
+                  }
+                  const next = !profileDraft.disponible;
+                  setProfileDraft((d) => ({ ...d, disponible: next }));
+                  onUpdateUser({ ...user, caregiverProfile: { ...user.caregiverProfile!, disponible: next } });
+                  onAvailabilityChange?.(next);
+                  if (!user.caregiverProfile?.apiId) return;
+                  setProfileError('');
+                  void (async () => {
+                    try { await updateCuidadorDisponible(user.caregiverProfile!.apiId!, next, user.token); }
+                    catch (e) { setProfileError(e instanceof Error ? e.message : 'No se pudo actualizar disponibilidad, se reintentará al guardar.'); }
+                  })();
+                }}
+                style={[styles.switchTrack, profileDraft.disponible && styles.switchTrackOn, !user.caregiverProfile.verificado && styles.switchTrackDisabled]}
+              >
+                <View style={[styles.switchThumb, profileDraft.disponible && styles.switchThumbOn]} />
+              </Pressable>
+            </View>
+            {profileError ? <Text style={styles.locationError}>{profileError}</Text> : null}
           </View>
 
           {!user.caregiverProfile.verificado && (
             <View style={[styles.detailsCard, styles.profileSectionCard]}>
             <View style={styles.profileSectionHeading}>
               <View>
-                <Text style={styles.sectionTitle}>Verificación</Text>
+                <Text style={styles.profileSectionTitle}>Verificación</Text>
                 <Text style={styles.profileSectionHint}>Identidad segura para las familias</Text>
               </View>
               <View style={styles.verificationStateBadge}>
                 <Text style={styles.verificationStateText}>Pendiente</Text>
               </View>
             </View>
-            <Text style={styles.profileDescription}>
+            <Text style={styles.caregiverProfileDescription}>
               Sube una foto clara de tu INE y un selfie para que un administrador revise tu cuenta. Mientras tanto no puedes estar activo.
             </Text>
             <View style={styles.verificationRow}>
@@ -764,14 +797,64 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
           )}
 
           <View style={[styles.detailsCard, styles.profileSectionCard]}>
-            <Text style={styles.sectionTitle}>Tu cuenta</Text>
+            <Text style={styles.profileSectionTitle}>Tu cuenta</Text>
             <Pressable accessibilityRole="button" onPress={startEditingProfile} style={styles.profileMenuRow}>
-              <View style={styles.profileMenuIcon}><UserRound color={colors.accent} size={21} strokeWidth={2} /></View>
+              <View style={styles.profileMenuIcon}><UserRound color={profilePalette.primary} size={20} strokeWidth={1.8} /></View>
               <View style={styles.profileMenuCopy}>
-                <Text style={styles.profileMenuTitle}>Información personal</Text>
+                <Text style={styles.profileMenuTitle}>Editar perfil</Text>
                 <Text style={styles.profileMenuSubtitle}>{user.email} · {user.phone || 'Agrega tu teléfono'}</Text>
               </View>
-              <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
+              <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
+            </Pressable>
+          </View>
+
+          <Text style={styles.profileGroupTitle}>Configuración</Text>
+          <View style={[styles.detailsCard, styles.profileSectionCard]}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onSelectTab('notifications')}
+              style={styles.profileActionRow}
+            >
+              <View style={styles.profileMenuIcon}><Bell color={profilePalette.primary} size={19} strokeWidth={1.8} /></View>
+              <View style={styles.profileMenuCopy}>
+                <Text style={styles.profileMenuTitle}>Notificaciones</Text>
+                <Text style={styles.profileMenuSubtitle}>Solicitudes y novedades de tu perfil</Text>
+              </View>
+              <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={openLocationSettings} style={styles.profileActionRow}>
+              <View style={styles.profileMenuIcon}><MapPin color={profilePalette.primary} size={19} strokeWidth={1.8} /></View>
+              <View style={styles.profileMenuCopy}>
+                <Text style={styles.profileMenuTitle}>Direcciones y ubicaciones</Text>
+                <Text numberOfLines={1} style={styles.profileMenuSubtitle}>
+                  {user.caregiverProfile.serviceLocation || 'Configura tu zona de servicio'}
+                </Text>
+              </View>
+              <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setProfileSettingsVisible(true)}
+              style={[styles.profileActionRow, styles.profileActionRowLast]}
+            >
+              <View style={styles.profileMenuIcon}><Settings2 color={profilePalette.primary} size={19} strokeWidth={1.8} /></View>
+              <View style={styles.profileMenuCopy}>
+                <Text style={styles.profileMenuTitle}>Preferencias y seguridad</Text>
+                <Text style={styles.profileMenuSubtitle}>Apariencia, idioma y cuenta</Text>
+              </View>
+              <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
+            </Pressable>
+          </View>
+
+          <Text style={styles.profileGroupTitle}>Preferencias</Text>
+          <View style={[styles.detailsCard, styles.profileSectionCard]}>
+            <Pressable accessibilityRole="button" onPress={() => onSelectTab('clients')} style={[styles.profileActionRow, styles.profileActionRowLast]}>
+              <View style={styles.profileMenuIcon}><CalendarDays color={profilePalette.primary} size={19} strokeWidth={1.8} /></View>
+              <View style={styles.profileMenuCopy}>
+                <Text style={styles.profileMenuTitle}>Solicitudes y servicios</Text>
+                <Text style={styles.profileMenuSubtitle}>Administra tus servicios con familias</Text>
+              </View>
+              <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
             </Pressable>
           </View>
 
@@ -783,8 +866,8 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
               <View style={styles.modalBackdrop}>
                 <View style={styles.modalCard}>
                   <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-                  <Text style={styles.pageTitle}>Editar información</Text>
-                  <Text style={styles.subtitle}>Actualiza los datos que ven las familias en tu perfil.</Text>
+                  <Text style={styles.profileModalTitle}>Editar información</Text>
+                  <Text style={styles.profileModalSubtitle}>Actualiza los datos que ven las familias en tu perfil.</Text>
                   <TextInput style={styles.locationInput} placeholder="Nombre" value={profileDraft.name} onChangeText={(v) => setProfileDraft((d) => ({ ...d, name: v }))} />
                   <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Teléfono" value={profileDraft.phone} onChangeText={(v) => setProfileDraft((d) => ({ ...d, phone: v }))} />
                   <TextInput style={[styles.locationInput, { marginTop: 8 }]} placeholder="Título profesional" value={profileDraft.professionalTitle} onChangeText={(v) => setProfileDraft((d) => ({ ...d, professionalTitle: v }))} />
@@ -803,22 +886,44 @@ export function CaregiverWorkspaceScreen({ tab, user, onSelectTab, onSaveLocatio
             </KeyboardAvoidingView>
           </Modal>
 
-          <LocationEditor coordinates={user.caregiverProfile.serviceCoordinates} location={user.caregiverProfile.serviceLocation} onSave={onSaveLocation} />
+          <View onLayout={(event) => { locationSectionOffset.current = event.nativeEvent.layout.y; }}>
+            <LocationEditor coordinates={user.caregiverProfile.serviceCoordinates} location={user.caregiverProfile.serviceLocation} onSave={onSaveLocation} />
+          </View>
 
+          <Text style={styles.profileGroupTitle}>Cuenta y sesión</Text>
           <View style={styles.accountActions}>
             <Pressable disabled={profileSaving} onPress={() => setProfileConfirmation('removeProfile')} style={styles.accountActionRow}>
-              <Text style={styles.accountActionTextDanger}>{profileSaving ? 'Eliminando perfil...' : 'Eliminar perfil de cuidador'}</Text>
-              <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
+              <View style={styles.accountActionLeading}>
+                <Trash2 color={profilePalette.primary} size={18} strokeWidth={1.8} />
+                <Text style={styles.accountActionTextDanger}>{profileSaving ? 'Eliminando perfil...' : 'Eliminar perfil de cuidador'}</Text>
+              </View>
+              <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
             </Pressable>
             <Pressable disabled={profileSaving} onPress={() => setProfileConfirmation('deleteAccount')} style={styles.accountActionRow}>
-              <Text style={styles.accountActionTextDanger}>{profileSaving ? 'Eliminando cuenta...' : 'Eliminar cuenta'}</Text>
-              <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
+              <View style={styles.accountActionLeading}>
+                <Trash2 color={profilePalette.primary} size={18} strokeWidth={1.8} />
+                <Text style={styles.accountActionTextDanger}>{profileSaving ? 'Eliminando cuenta...' : 'Eliminar cuenta'}</Text>
+              </View>
+              <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
             </Pressable>
-            <Pressable onPress={onSignOut} style={styles.accountActionRow}>
-              <Text style={styles.accountActionText}>Cerrar sesión</Text>
-              <ChevronRight color={colors.muted} size={21} strokeWidth={2} />
+            <Pressable onPress={confirmSignOut} style={[styles.accountActionRow, styles.accountSignOut]}>
+              <View style={styles.accountActionLeading}>
+                <LogOut color={profilePalette.primary} size={18} strokeWidth={1.8} />
+                <Text style={styles.accountActionText}>Cerrar sesión</Text>
+              </View>
+              <ChevronRight color={profilePalette.neutral} size={20} strokeWidth={1.8} />
             </Pressable>
           </View>
+          <ProfileScreen
+            onClose={() => setProfileSettingsVisible(false)}
+            onEditProfile={startEditingProfile}
+            onOpenAppointments={() => onSelectTab('clients')}
+            onOpenLocations={openLocationSettings}
+            onOpenTab={onSelectTab}
+            onSignOut={onSignOut}
+            user={user}
+            visible={profileSettingsVisible}
+          />
           <ConfirmationModal
             visible={!!profileConfirmation}
             title={profileConfirmation === 'removeProfile'
@@ -950,56 +1055,64 @@ function ProfileStat({ value, label }: { value: string; label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   contentScroll: { flex: 1 },
   page: { paddingHorizontal: 19, paddingTop: 24, paddingBottom: 48 },
-  profilePage: { backgroundColor: colors.canvas, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 52 },
+  profilePage: { backgroundColor: profilePalette.canvas, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 120 },
+  profileScreenHeader: { marginBottom: 14 },
+  profileScreenTitle: { color: profilePalette.ink, fontSize: 24, fontWeight: '800' },
   pageTitle: { color: colors.tealDark, fontSize: 25, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
-  profileHero: { backgroundColor: colors.highlightSoft, borderRadius: 25, marginHorizontal: -16, marginTop: -12, paddingHorizontal: 16, paddingTop: 13 },
-  profileTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'flex-end' },
-  profileCheckBadge: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 22, height: 42, justifyContent: 'center', width: 42 },
-  profileCheckBadgeVerified: { backgroundColor: colors.highlightSoft },
-  profilePortrait: { alignItems: 'center', marginTop: 8, zIndex: 1 },
-  profileSummaryCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 24, borderWidth: 1, marginBottom: 17, marginTop: -38, paddingHorizontal: 17, paddingTop: 51, paddingBottom: 16, shadowColor: colors.ink, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.07, shadowRadius: 16, elevation: 3 },
-  profileNameLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  profileNameCopy: { flex: 1, paddingRight: 8 },
-  profileDisplayName: { color: colors.ink, fontSize: 17, fontWeight: '800' },
-  profileDisplaySubtitle: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  profileRoleBadge: { backgroundColor: colors.ink, borderRadius: 15, paddingHorizontal: 11, paddingVertical: 7 },
-  profileRoleBadgeVerified: { backgroundColor: colors.highlight },
-  profileRoleBadgeText: { color: colors.white, fontSize: 9, fontWeight: '800' },
-  profileRoleBadgeTextVerified: { color: colors.ink },
-  profileStats: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 17, flexDirection: 'row', justifyContent: 'space-around', marginTop: 16, paddingVertical: 12 },
+  profileModalTitle: { color: profilePalette.ink, fontSize: 22, fontWeight: '800' },
+  profileModalSubtitle: { color: profilePalette.secondary, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  profileHero: { backgroundColor: profilePalette.surface, borderColor: profilePalette.neutral, borderRadius: 16, borderWidth: 1, marginBottom: 13, padding: 15 },
+  profileIdentityRow: { alignItems: 'flex-start', flexDirection: 'row' },
+  profileIdentityCopy: { flex: 1, marginLeft: 12, minWidth: 0 },
+  profileDisplayName: { color: profilePalette.ink, fontSize: 17, fontWeight: '800' },
+  profileDisplaySubtitle: { color: profilePalette.secondary, fontSize: 11, marginTop: 3 },
+  profileContact: { color: profilePalette.ink, fontSize: 10, marginTop: 4 },
+  profileBadges: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  profileRoleBadge: { backgroundColor: profilePalette.primary, borderRadius: 12, paddingHorizontal: 9, paddingVertical: 5 },
+  profileRoleBadgeText: { color: profilePalette.white, fontSize: 9, fontWeight: '700' },
+  profileVerificationBadge: { alignItems: 'center', backgroundColor: profilePalette.light, borderRadius: 12, flexDirection: 'row', gap: 4, paddingHorizontal: 8, paddingVertical: 5 },
+  profileVerificationBadgeVerified: { backgroundColor: profilePalette.light },
+  profileVerificationBadgeText: { color: profilePalette.primary, fontSize: 9, fontWeight: '700' },
+  profileStats: { alignItems: 'center', backgroundColor: profilePalette.light, borderRadius: 13, flexDirection: 'row', justifyContent: 'space-around', marginTop: 14, paddingVertical: 11 },
   profileStat: { alignItems: 'center', flex: 1 },
-  profileStatValue: { color: colors.ink, fontSize: 17, fontWeight: '800' },
-  profileStatLabel: { color: colors.muted, fontSize: 9, marginTop: 4, textAlign: 'center' },
-  profileStatDivider: { backgroundColor: colors.line, height: 30, width: 1 },
-  profileAvailability: { alignItems: 'center', backgroundColor: colors.soft, borderRadius: 15, flexDirection: 'row', marginTop: 13, paddingHorizontal: 12, paddingVertical: 10 },
-  profileAvailabilityDot: { backgroundColor: colors.gold, borderRadius: 5, height: 10, width: 10 },
-  profileAvailabilityDotOn: { backgroundColor: colors.green },
+  profileStatValue: { color: profilePalette.ink, fontSize: 16, fontWeight: '800' },
+  profileStatLabel: { color: profilePalette.primary, fontSize: 9, marginTop: 4, textAlign: 'center' },
+  profileStatDivider: { backgroundColor: profilePalette.neutral, height: 30, width: 1 },
+  profileSchedule: { color: profilePalette.primary, fontSize: 10, lineHeight: 15, marginTop: 10 },
+  profileIdentityDetails: { borderColor: profilePalette.neutral, borderRadius: 12, borderWidth: 1, flexDirection: 'row', marginTop: 10, paddingHorizontal: 10, paddingVertical: 9 },
+  profileIdentityDetail: { flex: 1, minWidth: 0, paddingRight: 7 },
+  profileIdentityLabel: { color: profilePalette.secondary, fontSize: 9, fontWeight: '700' },
+  profileIdentityValue: { color: profilePalette.ink, fontSize: 10, marginTop: 3 },
+  caregiverProfileDescription: { color: profilePalette.primary, fontSize: 10, lineHeight: 15, marginTop: 10 },
+  profileAvailability: { alignItems: 'center', backgroundColor: profilePalette.canvas, borderRadius: 12, flexDirection: 'row', marginTop: 12, paddingHorizontal: 11, paddingVertical: 10 },
+  profileAvailabilityDot: { backgroundColor: profilePalette.neutral, borderRadius: 5, height: 10, width: 10 },
+  profileAvailabilityDotOn: { backgroundColor: profilePalette.primary },
   profileAvailabilityCopy: { flex: 1, marginLeft: 9 },
-  profileAvailabilityTitle: { color: colors.tealDark, fontSize: 10, fontWeight: '800' },
-  profileAvailabilityHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  profileAvailabilityTitle: { color: profilePalette.ink, fontSize: 11, fontWeight: '800' },
+  profileAvailabilityHint: { color: profilePalette.secondary, fontSize: 9, lineHeight: 13, marginTop: 3 },
   summaryCard: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 16, flexDirection: 'row', marginTop: 19, padding: 14 },
-  summaryIcon: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
+  summaryIcon: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
   summaryIconText: { color: colors.tealDark, fontSize: 23 },
   summaryCopy: { flex: 1, marginLeft: 11 },
   summaryTitle: { color: colors.tealDark, fontSize: 12, fontWeight: '800' },
   summarySubtitle: { color: colors.muted, fontSize: 10, marginTop: 4 },
-  countBadge: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 13, height: 26, justifyContent: 'center', width: 26 },
+  countBadge: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 13, height: 26, justifyContent: 'center', width: 26 },
   countText: { color: colors.white, fontSize: 11, fontWeight: '800' },
   pendingBanner: { backgroundColor: colors.highlightSoft, borderRadius: 14, marginTop: 10, padding: 12 },
   pendingBannerTitle: { color: colors.tealDark, fontSize: 11, fontWeight: '800' },
   pendingBannerText: { color: colors.ink, fontSize: 9, marginTop: 4 },
   categoryScroller: { flexGrow: 0, marginBottom: 22, marginTop: 17 },
-  categoryChip: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 17, borderWidth: 1, marginRight: 7, paddingHorizontal: 12, paddingVertical: 8 },
-  selectedCategoryChip: { backgroundColor: colors.tealDark, borderColor: colors.tealDark },
+  categoryChip: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 17, borderWidth: 1, marginRight: 7, paddingHorizontal: 12, paddingVertical: 8 },
+  selectedCategoryChip: { backgroundColor: colors.teal, borderColor: colors.tealDark },
   categoryText: { color: colors.muted, fontSize: 10, fontWeight: '600' },
   selectedCategoryText: { color: colors.white },
   sectionEyebrow: { color: colors.muted, fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 9 },
-  notificationCard: { alignItems: 'flex-start', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 20, borderWidth: 1, flexDirection: 'row', marginBottom: 9, padding: 14 },
+  notificationCard: { alignItems: 'flex-start', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 20, borderWidth: 1, flexDirection: 'row', marginBottom: 9, padding: 14 },
   unreadCard: { borderColor: colors.tealPale },
   notificationIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 21, height: 42, justifyContent: 'center', width: 42 },
   notificationIconText: { color: colors.tealDark, fontSize: 18, fontWeight: '800' },
@@ -1008,11 +1121,11 @@ const styles = StyleSheet.create({
   notificationCopy: { flex: 1, marginLeft: 10 },
   notificationTitleLine: { alignItems: 'center', flexDirection: 'row' },
   notificationTitle: { color: colors.tealDark, flex: 1, fontSize: 11, fontWeight: '800' },
-  unreadDot: { backgroundColor: colors.tealDark, borderRadius: 4, height: 7, marginLeft: 5, width: 7 },
+  unreadDot: { backgroundColor: colors.teal, borderRadius: 4, height: 7, marginLeft: 5, width: 7 },
   notificationBody: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 5 },
   notificationMeta: { color: colors.tealDark, fontSize: 9, fontWeight: '600', marginTop: 7 },
   demoNote: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 13, textAlign: 'center' },
-  conversationCard: { alignItems: 'center', backgroundColor: colors.white, borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 14 },
+  conversationCard: { alignItems: 'center', backgroundColor: colors.surface, borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 14 },
   conversationCopy: { flex: 1, marginLeft: 11 },
   conversationTitleLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   conversationName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
@@ -1020,7 +1133,7 @@ const styles = StyleSheet.create({
   conversationPreview: { color: colors.muted, fontSize: 10, marginTop: 5 },
   conversationPlace: { color: colors.tealDark, fontSize: 9, marginTop: 4 },
   chatScreen: { backgroundColor: colors.canvas, flex: 1 },
-  chatHeader: { alignItems: 'center', backgroundColor: colors.white, borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 10 },
+  chatHeader: { alignItems: 'center', backgroundColor: colors.surface, borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 10 },
   chatBack: { alignItems: 'center', height: 38, justifyContent: 'center', marginRight: 7, width: 29 },
   chatBackText: { color: colors.ink, fontSize: 30, lineHeight: 34, marginTop: -4 },
   chatHeaderCopy: { flex: 1, marginLeft: 9 },
@@ -1028,18 +1141,18 @@ const styles = StyleSheet.create({
   chatStatus: { color: colors.muted, fontSize: 9, marginTop: 3 },
   chatContent: { alignItems: 'flex-start', flexGrow: 1, paddingHorizontal: 16, paddingVertical: 18 },
   chatDate: { alignSelf: 'center', color: colors.muted, fontSize: 9, fontWeight: '700', marginBottom: 18 },
-  messageBubble: { backgroundColor: colors.white, borderRadius: 15, borderBottomLeftRadius: 4, marginBottom: 10, maxWidth: '82%', paddingHorizontal: 12, paddingVertical: 10 },
-  ownMessage: { alignSelf: 'flex-end', backgroundColor: colors.tealDark, borderBottomLeftRadius: 15, borderBottomRightRadius: 4 },
+  messageBubble: { backgroundColor: colors.surface, borderRadius: 15, borderBottomLeftRadius: 4, marginBottom: 10, maxWidth: '82%', paddingHorizontal: 12, paddingVertical: 10 },
+  ownMessage: { alignSelf: 'flex-end', backgroundColor: colors.teal, borderBottomLeftRadius: 15, borderBottomRightRadius: 4 },
   messageText: { color: colors.ink, fontSize: 11, lineHeight: 16 },
   ownMessageText: { color: colors.white },
-  composer: { alignItems: 'center', backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 9 },
+  composer: { alignItems: 'center', backgroundColor: colors.surface, borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 9 },
   composerInput: { backgroundColor: colors.canvas, borderRadius: 20, color: colors.ink, flex: 1, fontSize: 11, height: 40, paddingHorizontal: 14 },
-  sendButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 20, height: 38, justifyContent: 'center', marginLeft: 8, width: 38 },
+  sendButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 20, height: 38, justifyContent: 'center', marginLeft: 8, width: 38 },
   sendButtonText: { color: colors.white, fontSize: 19, fontWeight: '700' },
   contactSummary: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.tealPale, borderRadius: 13, flexDirection: 'row', marginVertical: 18, paddingHorizontal: 13, paddingVertical: 9 },
   contactSummaryNumber: { color: colors.tealDark, fontSize: 15, fontWeight: '800' },
   contactSummaryText: { color: colors.tealDark, fontSize: 10, marginLeft: 7 },
-  clientCard: { alignItems: 'center', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 15, borderWidth: 1, flexDirection: 'row', marginBottom: 10, padding: 12 },
+  clientCard: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 15, borderWidth: 1, flexDirection: 'row', marginBottom: 10, padding: 12 },
   avatar: { alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: colors.tealDark, fontWeight: '800' },
   clientCopy: { flex: 1, marginLeft: 10 },
@@ -1048,74 +1161,80 @@ const styles = StyleSheet.create({
   clientLocation: { color: colors.tealDark, fontSize: 9, marginTop: 5 },
   messageAction: { backgroundColor: colors.tealPale, borderRadius: 15, marginLeft: 7, paddingHorizontal: 10, paddingVertical: 8 },
   messageActionText: { color: colors.muted, fontSize: 9, fontWeight: '800' },
-  locationCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 22, borderWidth: 1, marginTop: 13, padding: 17 },
+  locationCard: { backgroundColor: profilePalette.surface, borderColor: profilePalette.neutral, borderRadius: 16, borderWidth: 1, marginTop: 13, padding: 15 },
   locationHeading: { alignItems: 'center', flexDirection: 'row', marginBottom: 12 },
-  locationIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 18, height: 36, justifyContent: 'center', marginRight: 9, width: 36 },
-  pinOuter: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 8, height: 16, justifyContent: 'center', width: 16 },
-  pinInner: { backgroundColor: colors.white, borderRadius: 3, height: 6, width: 6 },
-  sectionTitle: { color: colors.tealDark, fontSize: 12, fontWeight: '800' },
-  locationHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
-  locationInput: { backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 11, height: 43, paddingHorizontal: 11 },
-  useLocationButton: { alignSelf: 'flex-start', backgroundColor: colors.tealPale, borderRadius: 10, marginTop: 8, paddingHorizontal: 10, paddingVertical: 8 },
-  useLocationText: { color: colors.muted, fontSize: 9, fontWeight: '700' },
+  locationIcon: { alignItems: 'center', backgroundColor: profilePalette.light, borderRadius: 18, height: 36, justifyContent: 'center', marginRight: 9, width: 36 },
+  pinOuter: { alignItems: 'center', backgroundColor: profilePalette.primary, borderRadius: 8, height: 16, justifyContent: 'center', width: 16 },
+  pinInner: { backgroundColor: profilePalette.surface, borderRadius: 3, height: 6, width: 6 },
+  sectionTitle: { color: profilePalette.ink, fontSize: 13, fontWeight: '700' },
+  locationHint: { color: profilePalette.secondary, fontSize: 10, marginTop: 3 },
+  locationInput: { backgroundColor: profilePalette.surface, borderColor: profilePalette.neutral, borderRadius: 10, borderWidth: 1, color: profilePalette.ink, fontSize: 12, minHeight: 43, paddingHorizontal: 11, paddingVertical: 10 },
+  useLocationButton: { alignSelf: 'flex-start', backgroundColor: profilePalette.light, borderRadius: 10, marginTop: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  useLocationText: { color: profilePalette.primary, fontSize: 10, fontWeight: '700' },
   mapPreview: { borderRadius: 12, height: 190, marginTop: 10, overflow: 'hidden' },
-  coordinatesNote: { color: colors.muted, fontSize: 9, marginTop: 7 },
-  locationError: { color: colors.accent, fontSize: 10, marginTop: 6 },
-  saveLocationButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 10, marginTop: 9, paddingVertical: 10 },
-  saveLocationText: { color: colors.white, fontSize: 10, fontWeight: '800' },
-  detailsCard: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginTop: 12, padding: 14 },
-  serviceSearch: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 11, borderWidth: 1, color: colors.ink, fontSize: 11, marginTop: 14, paddingHorizontal: 11, paddingVertical: 9 },
+  coordinatesNote: { color: profilePalette.secondary, fontSize: 10, marginTop: 7 },
+  locationError: { color: profilePalette.primary, fontSize: 10, marginTop: 6 },
+  saveLocationButton: { alignItems: 'center', backgroundColor: profilePalette.primary, borderRadius: 10, marginTop: 9, minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 10 },
+  saveLocationText: { color: profilePalette.white, fontSize: 11, fontWeight: '800' },
+  detailsCard: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginTop: 12, padding: 14 },
+  serviceSearch: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 11, borderWidth: 1, color: colors.ink, fontSize: 11, marginTop: 14, paddingHorizontal: 11, paddingVertical: 9 },
   serviceFilters: { flexGrow: 0, marginBottom: 10, marginTop: 10 },
-  serviceFilterChip: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginRight: 7, paddingHorizontal: 11, paddingVertical: 7 },
-  serviceFilterChipActive: { backgroundColor: colors.tealDark, borderColor: colors.tealDark },
+  serviceFilterChip: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 16, borderWidth: 1, marginRight: 7, paddingHorizontal: 11, paddingVertical: 7 },
+  serviceFilterChipActive: { backgroundColor: colors.teal, borderColor: colors.tealDark },
   serviceFilterText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
   serviceFilterTextActive: { color: colors.white },
   serviceTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   serviceStatus: { backgroundColor: colors.highlightSoft, borderRadius: 9, color: colors.ink, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
   serviceMeta: { color: colors.tealDark, fontSize: 9, lineHeight: 13, marginTop: 7 },
   serviceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 9 },
-  acceptButton: { backgroundColor: colors.tealDark, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
+  acceptButton: { backgroundColor: colors.teal, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
   acceptButtonText: { color: colors.white, fontSize: 9, fontWeight: '800' },
   rejectButton: { backgroundColor: colors.highlightSoft, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
   rejectButtonText: { color: colors.ink, fontSize: 9, fontWeight: '800' },
   deleteButton: { backgroundColor: colors.tealPale, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 8 },
   deleteButtonText: { color: colors.accent, fontSize: 9, fontWeight: '800' },
-  profileSectionCard: { borderColor: colors.line, borderRadius: 22, marginTop: 13, padding: 17, shadowColor: colors.ink, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.035, shadowRadius: 10, elevation: 1 },
+  profileSectionCard: { borderColor: profilePalette.neutral, borderRadius: 16, marginTop: 13, padding: 15 },
   profileSectionHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  profileSectionHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
-  verificationStateBadge: { backgroundColor: colors.highlightSoft, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
-  verificationStateText: { color: colors.ink, fontSize: 9, fontWeight: '800' },
-  profileMenuRow: { alignItems: 'center', flexDirection: 'row', marginTop: 12, paddingVertical: 5 },
-  profileMenuIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
-  profileMenuCopy: { flex: 1, marginLeft: 11 },
-  profileMenuTitle: { color: colors.tealDark, fontSize: 11, fontWeight: '800' },
-  profileMenuSubtitle: { color: colors.muted, fontSize: 9, marginTop: 4 },
-  accountActions: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginTop: 13, paddingHorizontal: 15 },
-  accountActionRow: { alignItems: 'center', borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 48 },
-  accountActionText: { color: colors.ink, fontSize: 10, fontWeight: '700' },
-  accountActionTextDanger: { color: colors.accent, fontSize: 10, fontWeight: '700' },
-  detailText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', marginTop: 7 },
+  profileSectionTitle: { color: profilePalette.ink, fontSize: 13, fontWeight: '700' },
+  profileSectionHint: { color: profilePalette.secondary, fontSize: 10, marginTop: 3 },
+  profileGroupTitle: { color: profilePalette.secondary, fontSize: 12, fontWeight: '700', marginBottom: 8, marginTop: 18 },
+  verificationStateBadge: { backgroundColor: profilePalette.light, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
+  verificationStateText: { color: profilePalette.primary, fontSize: 9, fontWeight: '800' },
+  profileMenuRow: { alignItems: 'center', flexDirection: 'row', marginTop: 9, minHeight: 52, paddingVertical: 5 },
+  profileActionRow: { alignItems: 'center', borderBottomColor: profilePalette.neutral, borderBottomWidth: 1, flexDirection: 'row', minHeight: 56, paddingVertical: 7 },
+  profileActionRowLast: { borderBottomWidth: 0 },
+  profileMenuIcon: { alignItems: 'center', backgroundColor: profilePalette.light, borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
+  profileMenuCopy: { flex: 1, marginLeft: 11, minWidth: 0 },
+  profileMenuTitle: { color: profilePalette.ink, fontSize: 13, fontWeight: '700' },
+  profileMenuSubtitle: { color: profilePalette.secondary, fontSize: 10, marginTop: 4 },
+  accountActions: { backgroundColor: profilePalette.surface, borderColor: profilePalette.neutral, borderRadius: 16, borderWidth: 1, marginTop: 13, paddingHorizontal: 13 },
+  accountActionRow: { alignItems: 'center', borderBottomColor: profilePalette.neutral, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 52 },
+  accountActionLeading: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: 11, minWidth: 0 },
+  accountSignOut: { backgroundColor: profilePalette.light, borderBottomWidth: 0, borderRadius: 12, marginBottom: 9, marginTop: 8, minHeight: 48, paddingHorizontal: 10 },
+  accountActionText: { color: profilePalette.ink, fontSize: 13, fontWeight: '700' },
+  accountActionTextDanger: { color: profilePalette.primary, flexShrink: 1, fontSize: 12, fontWeight: '700' },
   profileDescription: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 7 },
+  detailText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', marginTop: 7 },
   specialties: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
-  specialtyChip: { backgroundColor: colors.tealPale, borderRadius: 11, color: colors.tealDark, fontSize: 9, marginBottom: 5, marginRight: 5, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 6 },
-  signOutButton: { alignItems: 'center', borderColor: colors.line, borderRadius: 12, borderWidth: 1, marginTop: 14, paddingVertical: 12 },
-  signOutText: { color: colors.tealDark, fontSize: 11, fontWeight: '700' },
-  modalBackdrop: { alignItems: 'center', backgroundColor: colors.ink, flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 24 },
+  specialtyChip: { backgroundColor: profilePalette.light, borderRadius: 11, color: profilePalette.primary, fontSize: 9, marginBottom: 5, marginRight: 5, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 6 },
+  signOutButton: { alignItems: 'center', borderColor: profilePalette.neutral, borderRadius: 12, borderWidth: 1, marginTop: 14, paddingVertical: 12 },
+  signOutText: { color: profilePalette.primary, fontSize: 12, fontWeight: '700' },
+  modalBackdrop: { alignItems: 'center', backgroundColor: profilePalette.ink, flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 24 },
   modalKeyboardAvoiding: { flex: 1 },
-  modalCard: { backgroundColor: colors.canvas, borderRadius: 24, maxHeight: '90%', maxWidth: 520, width: '100%' },
-  modalContent: { padding: 20, paddingBottom: 24 },
-  switchTrack: { width: 48, height: 28, borderRadius: 14, backgroundColor: colors.line, padding: 2 },
-  switchTrackOn: { backgroundColor: colors.tealDark },
+  modalCard: { backgroundColor: profilePalette.surface, borderRadius: 16, maxHeight: '90%', maxWidth: 520, width: '100%' },
+  modalContent: { padding: 20, paddingBottom: 28 },
+  switchTrack: { width: 48, height: 28, borderRadius: 14, backgroundColor: profilePalette.neutral, padding: 2 },
+  switchTrackOn: { backgroundColor: profilePalette.primary },
   switchTrackDisabled: { opacity: 0.45 },
-  switchThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.white },
+  switchThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: profilePalette.surface },
   switchThumbOn: { marginLeft: 20 },
   verificationBanner: { backgroundColor: colors.highlightSoft, borderColor: colors.gold, borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 13 },
   verificationBannerTitle: { color: colors.tealDark, fontSize: 12, fontWeight: '800' },
   verificationBannerText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 5 },
   verificationBannerAction: { color: colors.muted, fontSize: 10, fontWeight: '800', marginTop: 8 },
-  verificationReviewText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', marginTop: 9 },
+  verificationReviewText: { color: profilePalette.primary, fontSize: 10, fontWeight: '700', marginTop: 9 },
   verificationRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  verificationPick: { alignItems: 'center', backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 12, borderWidth: 1, flex: 1, height: 96, justifyContent: 'center', overflow: 'hidden' },
-  verificationPickText: { color: colors.tealDark, fontSize: 10, fontWeight: '700', textAlign: 'center' },
+  verificationPick: { alignItems: 'center', backgroundColor: profilePalette.canvas, borderColor: profilePalette.neutral, borderRadius: 12, borderWidth: 1, flex: 1, height: 96, justifyContent: 'center', overflow: 'hidden' },
+  verificationPickText: { color: profilePalette.primary, fontSize: 10, fontWeight: '700', textAlign: 'center' },
   verificationPreview: { height: 96, width: '100%' },
-});
+}));

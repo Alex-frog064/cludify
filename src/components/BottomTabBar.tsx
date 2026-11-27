@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Pressable, useWindowDimensions, View , StyleSheet} from 'react-native';
 import { House, MessageCircle, Search, UserRound } from 'lucide-react-native';
-import { secondaryColors as colors } from '../theme';
+import { secondaryColors as colors , createThemedStyles} from '../theme';
 import { AccountRole } from '../types';
 
 export type FamilyTabKey = 'care' | 'messages' | 'account';
@@ -13,21 +13,21 @@ type TabIcon = typeof House;
 const familyTabs: { key: TabKey; label: string; icon: TabIcon }[] = [
   { key: 'explore', label: 'Inicio', icon: House },
   { key: 'care', label: 'Buscar', icon: Search },
-  { key: 'messages', label: 'Mensajes', icon: MessageCircle },
+  { key: 'messages', label: 'Chats', icon: MessageCircle },
   { key: 'account', label: 'Perfil', icon: UserRound },
 ];
 
 const caregiverTabs: { key: TabKey; label: string; icon: TabIcon }[] = [
   { key: 'notifications', label: 'Inicio', icon: House },
   { key: 'clients', label: 'Buscar', icon: Search },
-  { key: 'messages', label: 'Mensajes', icon: MessageCircle },
+  { key: 'messages', label: 'Chats', icon: MessageCircle },
   { key: 'profile', label: 'Perfil', icon: UserRound },
 ];
 
 const activeWidths: Record<string, number> = {
   Inicio: 88,
   Buscar: 91,
-  Mensajes: 105,
+  Chats: 83,
   Perfil: 83,
 };
 
@@ -110,9 +110,9 @@ function TabButton({ onPress, selected, tab }: { onPress: () => void; selected: 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   bar: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 32,
     elevation: 8,
     flexDirection: 'row',
@@ -129,4 +129,4 @@ const styles = StyleSheet.create({
   activeTabShell: { backgroundColor: colors.accent },
   tab: { alignItems: 'center', flexDirection: 'row', height: '100%', justifyContent: 'center', width: '100%' },
   label: { color: colors.white, fontSize: 11, fontWeight: '700', marginLeft: 6 },
-});
+}));

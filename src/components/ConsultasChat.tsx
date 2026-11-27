@@ -1,16 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text, LocalizedTextInput as TextInput } from './LocalizedText';
 import type { ScrollViewInstance } from 'react-native';
+import { ArrowLeft, ChevronRight, MessageCircle, Search, Send, X } from 'lucide-react-native';
 
 import {
   enviarMensajeConsulta,
@@ -19,7 +11,7 @@ import {
   getMensajesConsulta,
   marcarMensajesLeidos,
 } from '../api/auth';
-import { secondaryColors as colors } from '../theme';
+import { secondaryColors as colors , createThemedStyles} from '../theme';
 import type { ConsultaCuidador, MensajeConsulta } from '../types';
 
 type Props = {
@@ -107,6 +99,8 @@ export function ConsultasChat({
   const [mensajes, setMensajes] = useState<MensajeConsulta[]>([]);
   const [messagesReadyFor, setMessagesReadyFor] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [consultasLoaded, setConsultasLoaded] = useState(false);
   const [sending, setSending] = useState(false);
@@ -209,7 +203,7 @@ export function ConsultasChat({
   if (!token) {
     return (
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-        <Text style={styles.pageTitle}>Mensajes</Text>
+        <Text style={styles.pageTitle}>Chats</Text>
         <View style={styles.emptyCard}>
           <Text style={styles.emptyIcon}>◌</Text>
           <Text style={styles.emptyTitle}>Inicia sesión para ver tus conversaciones</Text>
@@ -227,6 +221,14 @@ export function ConsultasChat({
   }
 
   const selected = consultas.find((item) => item.consulta_id === selectedId);
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const visibleConsultas = consultas.filter((consulta) => {
+    if (unreadOnly && Number(consulta.no_leidos ?? 0) <= 0) return false;
+    if (!normalizedSearch) return true;
+    const searchableText = `${conversationTitle(consulta, viewerRole)} ${conversationSubtitle(consulta, viewerRole)}`.toLocaleLowerCase();
+    return searchableText.includes(normalizedSearch);
+  });
+  const unreadConversations = consultas.filter((consulta) => Number(consulta.no_leidos ?? 0) > 0).length;
 
   return (
     <KeyboardAvoidingView
@@ -245,7 +247,7 @@ export function ConsultasChat({
             }}
             style={styles.backButton}
           >
-            <Text style={styles.backButtonText}>‹</Text>
+            <ArrowLeft color={colors.ink} size={20} strokeWidth={2} />
           </Pressable>
           <View style={styles.contactAvatar}>
             <Text style={styles.contactAvatarText}>{initialsFor(conversationTitle(selected, viewerRole))}</Text>
@@ -267,8 +269,7 @@ export function ConsultasChat({
         </View>
       ) : (
         <View style={styles.header}>
-          <Text style={styles.pageTitle}>Mensajes</Text>
-          <Text style={styles.subtitle}>Tus conversaciones de cuidado, en un solo lugar.</Text>
+          <Text style={styles.pageTitle}>Chats</Text>
         </View>
       )}
 
@@ -307,17 +308,50 @@ export function ConsultasChat({
         </View>
       ) : !selected ? (
         <View style={styles.listContainer}>
-          <View style={styles.listHeading}>
-            <View>
-              <Text style={styles.listTitle}>Conversaciones</Text>
-              <Text style={styles.listSubtitle}>Selecciona una para ver el historial.</Text>
-            </View>
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{consultas.length}</Text>
-            </View>
+          <View style={styles.searchBox}>
+            <Search color={colors.muted} size={18} strokeWidth={1.8} />
+            <TextInput
+              accessibilityLabel="Buscar conversaciones"
+              onChangeText={setSearchQuery}
+              placeholder="Buscar por nombre"
+              placeholderTextColor={colors.muted}
+              returnKeyType="search"
+              style={styles.searchInput}
+              value={searchQuery}
+            />
+            {!!searchQuery && (
+              <Pressable
+                accessibilityLabel="Limpiar búsqueda"
+                accessibilityRole="button"
+                onPress={() => setSearchQuery('')}
+                style={styles.clearSearchButton}
+              >
+                <X color={colors.muted} size={16} strokeWidth={2} />
+              </Pressable>
+            )}
+          </View>
+          <View style={styles.filterRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: !unreadOnly }}
+              onPress={() => setUnreadOnly(false)}
+              style={[styles.filterChip, !unreadOnly && styles.filterChipActive]}
+            >
+              <Text style={[styles.filterText, !unreadOnly && styles.filterTextActive]}>Todas</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: unreadOnly }}
+              onPress={() => setUnreadOnly(true)}
+              style={[styles.filterChip, unreadOnly && styles.filterChipActive]}
+            >
+              <Text style={[styles.filterText, unreadOnly && styles.filterTextActive]}>
+                No leídos{unreadConversations ? ` · ${unreadConversations}` : ''}
+              </Text>
+            </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.conversationList} showsVerticalScrollIndicator={false} style={styles.threadScroll}>
-            {consultas.map((consulta) => {
+            {visibleConsultas.length ? visibleConsultas.map((consulta) => {
               const name = conversationTitle(consulta, viewerRole);
               const unreadCount = Number(consulta.no_leidos ?? 0);
               const pendingCount = unansweredByConsulta?.[consulta.consulta_id] ?? 0;
@@ -344,7 +378,7 @@ export function ConsultasChat({
                           ? `${pendingCount} mensaje${pendingCount === 1 ? '' : 's'} sin contestar`
                           : unreadCount
                             ? `${unreadCount} mensaje${unreadCount === 1 ? '' : 's'} sin leer`
-                            : 'Toca para ver los mensajes'}
+                            : 'Abrir conversación'}
                       </Text>
                       {pendingCount > 0 ? (
                         <View style={styles.pendingBadge}>
@@ -357,10 +391,17 @@ export function ConsultasChat({
                       ) : null}
                     </View>
                   </View>
-                  <Text style={styles.conversationArrow}>›</Text>
+                  <ChevronRight color={colors.line} size={18} style={styles.conversationArrow} strokeWidth={1.8} />
                 </Pressable>
               );
-            })}
+            }) : (
+              <View style={styles.noResults}>
+                <MessageCircle color={colors.muted} size={22} strokeWidth={1.7} />
+                <Text style={styles.noResultsText}>
+                  {consultas.length ? 'No hay conversaciones con estos filtros.' : 'Aún no tienes conversaciones.'}
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </View>
       ) : (
@@ -435,7 +476,7 @@ export function ConsultasChat({
               {sending ? (
                 <ActivityIndicator color={colors.white} size="small" />
               ) : (
-                <Text style={styles.sendButtonText}>Enviar</Text>
+                <Send color={colors.white} size={18} strokeWidth={2} />
               )}
             </Pressable>
           </View>
@@ -447,18 +488,19 @@ export function ConsultasChat({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18 },
+  header: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 16 },
   page: { paddingBottom: 36, paddingHorizontal: 18, paddingTop: 20 },
   pageTitle: { color: colors.tealDark, fontSize: 26, fontWeight: '800' },
-  subtitle: { color: colors.muted, fontSize: 12, marginTop: 6 },
   loadingWrap: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   loadingText: { color: colors.muted, fontSize: 12, marginTop: 10 },
   emptyCard: {
     alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: 22,
+    backgroundColor: colors.surface,
+    borderColor: colors.line,
+    borderRadius: 20,
+    borderWidth: 1,
     marginHorizontal: 18,
     marginTop: 24,
     padding: 26,
@@ -482,51 +524,52 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   primaryText: { color: colors.white, fontSize: 12, fontWeight: '800' },
-  listContainer: { flex: 1 },
-  listHeading: {
+  listContainer: { flex: 1, minHeight: 0 },
+  searchBox: {
     alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-  },
-  listTitle: { color: colors.tealDark, fontSize: 16, fontWeight: '800' },
-  listSubtitle: { color: colors.muted, fontSize: 11, marginTop: 4 },
-  countBadge: {
-    alignItems: 'center',
-    backgroundColor: colors.highlightSoft,
-    borderRadius: 16,
-    height: 32,
-    justifyContent: 'center',
-    minWidth: 32,
-    paddingHorizontal: 8,
-  },
-  countBadgeText: { color: colors.tealDark, fontSize: 12, fontWeight: '800' },
-  pendingBanner: { backgroundColor: colors.highlightSoft, borderRadius: 18, marginHorizontal: 16, marginTop: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  pendingBannerTitle: { color: colors.tealDark, fontSize: 11, fontWeight: '800' },
-  pendingBannerText: { color: colors.ink, fontSize: 9, marginTop: 3 },
-  conversationList: { paddingHorizontal: 16, paddingBottom: 32 },
-  conversationCard: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderColor: colors.line,
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
-    marginBottom: 10,
-    minHeight: 84,
+    marginHorizontal: 18,
+    minHeight: 48,
     paddingHorizontal: 13,
-    paddingVertical: 12,
+  },
+  searchInput: { color: colors.ink, flex: 1, fontSize: 12, minHeight: 46, paddingHorizontal: 10, paddingVertical: 8 },
+  clearSearchButton: { alignItems: 'center', height: 32, justifyContent: 'center', width: 32 },
+  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 18, paddingVertical: 12 },
+  filterChip: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 18, borderWidth: 1, minHeight: 34, justifyContent: 'center', paddingHorizontal: 14 },
+  filterChipActive: { backgroundColor: colors.teal, borderColor: colors.teal },
+  filterText: { color: colors.ink, fontSize: 11, fontWeight: '700' },
+  filterTextActive: { color: colors.white },
+  noResults: { alignItems: 'center', gap: 9, paddingHorizontal: 24, paddingVertical: 40 },
+  noResultsText: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  pendingBanner: { backgroundColor: colors.tealPale, borderRadius: 14, marginHorizontal: 16, marginTop: 10, paddingHorizontal: 13, paddingVertical: 11 },
+  pendingBannerTitle: { color: colors.tealDark, fontSize: 11, fontWeight: '800' },
+  pendingBannerText: { color: colors.ink, fontSize: 9, marginTop: 3 },
+  conversationList: { paddingHorizontal: 18, paddingBottom: 28, paddingTop: 2 },
+  conversationCard: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.line,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginBottom: 9,
+    minHeight: 82,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
   },
   contactAvatar: {
     alignItems: 'center',
     backgroundColor: colors.tealPale,
     borderRadius: 24,
-    height: 48,
+    height: 50,
     justifyContent: 'center',
-    width: 48,
+    width: 50,
   },
-  contactAvatarText: { color: colors.tealDark, fontSize: 14, fontWeight: '800' },
+  contactAvatarText: { color: colors.teal, fontSize: 14, fontWeight: '800' },
   conversationCopy: { flex: 1, marginLeft: 12, minWidth: 0 },
   conversationTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   conversationName: { color: colors.ink, flex: 1, fontSize: 13, fontWeight: '800', marginRight: 8 },
@@ -535,7 +578,7 @@ const styles = StyleSheet.create({
   conversationBottomLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   conversationPreview: { color: colors.muted, flex: 1, fontSize: 10, marginRight: 8 },
   pendingPreview: { color: colors.ink, fontWeight: '700' },
-  conversationArrow: { color: colors.muted, fontSize: 27, marginLeft: 4 },
+  conversationArrow: { marginLeft: 4 },
   readOnlyNotice: {
     backgroundColor: colors.highlightSoft,
     borderRadius: 12,
@@ -547,20 +590,19 @@ const styles = StyleSheet.create({
   readOnlyText: { color: colors.ink, fontSize: 10, textAlign: 'center' },
   threadTopBar: {
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderBottomColor: colors.line,
     borderBottomWidth: 1,
     flexDirection: 'row',
-    minHeight: 72,
+    minHeight: 70,
     paddingHorizontal: 14,
   },
-  backButton: { alignItems: 'center', height: 42, justifyContent: 'center', width: 34 },
-  backButtonText: { color: colors.tealDark, fontSize: 34, lineHeight: 38 },
+  backButton: { alignItems: 'center', height: 42, justifyContent: 'center', width: 38 },
   threadTopCopy: { flex: 1, marginLeft: 11, minWidth: 0 },
   profileButton: { backgroundColor: colors.tealPale, borderRadius: 16, marginLeft: 8, paddingHorizontal: 11, paddingVertical: 8 },
   profileButtonText: { color: colors.muted, fontSize: 10, fontWeight: '800' },
   threadDetails: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.canvas,
     paddingHorizontal: 20,
     paddingBottom: 12,
     paddingTop: 2,
@@ -581,20 +623,22 @@ const styles = StyleSheet.create({
   unreadBadgeText: { color: colors.ink, fontSize: 9, fontWeight: '800' },
   pendingBadge: { alignItems: 'center', backgroundColor: colors.highlight, borderRadius: 10, height: 20, justifyContent: 'center', minWidth: 20, paddingHorizontal: 5 },
   pendingBadgeText: { color: colors.ink, fontSize: 9, fontWeight: '800' },
-  threadScroll: { flex: 1 },
+  threadScroll: { backgroundColor: colors.canvas, flex: 1 },
   thread: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 },
   messageRow: { alignItems: 'flex-start', flexDirection: 'row' },
   ownMessageRow: { justifyContent: 'flex-end' },
   bubble: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 5,
+    borderColor: colors.line,
+    borderWidth: 1,
     borderRadius: 17,
     marginBottom: 9,
     maxWidth: '84%',
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
-  ownBubble: { backgroundColor: colors.tealDark, borderBottomLeftRadius: 17, borderBottomRightRadius: 5 },
+  ownBubble: { backgroundColor: colors.teal, borderBottomColor: colors.teal, borderBottomLeftRadius: 17, borderBottomRightRadius: 5, borderColor: colors.teal },
   senderName: { color: colors.tealDark, fontSize: 10, fontWeight: '800', marginBottom: 4 },
   bubbleText: { color: colors.ink, fontSize: 13, lineHeight: 19 },
   ownBubbleText: { color: colors.white },
@@ -602,7 +646,7 @@ const styles = StyleSheet.create({
   ownBubbleTime: { color: colors.white },
   threadEmpty: {
     alignSelf: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     marginBottom: 18,
     maxWidth: 280,
@@ -615,35 +659,38 @@ const styles = StyleSheet.create({
   messagesLoadingText: { color: colors.muted, fontSize: 11, marginTop: 8 },
   composer: {
     alignItems: 'flex-end',
-    backgroundColor: colors.white,
+    backgroundColor: colors.canvas,
     borderTopColor: colors.line,
-    borderTopWidth: 1,
     flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   composerInput: {
-    backgroundColor: colors.canvas,
-    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderColor: colors.line,
+    borderRadius: 22,
+    borderWidth: 1,
     color: colors.ink,
     flex: 1,
     fontSize: 12,
     maxHeight: 90,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
   },
   sendButton: {
-    backgroundColor: colors.tealDark,
-    borderRadius: 18,
-    marginLeft: 8,
-    minHeight: 36,
+    backgroundColor: colors.teal,
+    borderRadius: 24,
+    height: 44,
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    width: 44,
   },
   disabledButton: { opacity: 0.5 },
   sendButtonText: { color: colors.white, fontSize: 11, fontWeight: '800' },
   readOnlyFooter: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderTopColor: colors.line,
     borderTopWidth: 1,
     paddingHorizontal: 18,
@@ -660,4 +707,4 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     textAlign: 'center',
   },
-});
+}));

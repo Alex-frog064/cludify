@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text } from '../components/LocalizedText';
 import { getAbuelo, getGeocercas, getUltimaUbicacionAbuelo } from '../api/auth';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
-import { colors } from '../theme';
+import { colors , createThemedStyles} from '../theme';
 import type { Abuelo, Coordinates, MapMarker, Ubicacion } from '../types';
 
 type Props = {
@@ -255,19 +256,19 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   contentScroll: { flex: 1 },
   content: { paddingBottom: 24 },
   hero: { alignItems: 'center', backgroundColor: colors.tealPale, paddingBottom: 22, paddingTop: 50 },
-  backButton: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 20, height: 38, justifyContent: 'center', left: 18, position: 'absolute', top: 12, width: 38 },
+  backButton: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 20, height: 38, justifyContent: 'center', left: 18, position: 'absolute', top: 12, width: 38 },
   backText: { color: colors.ink, fontSize: 30, lineHeight: 33, marginTop: -4 },
-  avatar: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 34, height: 68, justifyContent: 'center', width: 68 },
+  avatar: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 34, height: 68, justifyContent: 'center', width: 68 },
   avatarText: { color: colors.white, fontSize: 20, fontWeight: '800' },
   name: { color: colors.ink, fontSize: 20, fontWeight: '800', marginTop: 10 },
   subtitle: { color: colors.muted, fontSize: 11, marginTop: 4 },
   loadingWrap: { alignItems: 'center', paddingVertical: 40 },
-  card: { backgroundColor: colors.white, borderRadius: 18, marginHorizontal: 16, marginTop: 16, padding: 16 },
+  card: { backgroundColor: colors.surface, borderRadius: 18, marginHorizontal: 16, marginTop: 16, padding: 16 },
   cardTitle: { color: colors.tealDark, fontSize: 15, fontWeight: '800', marginBottom: 12 },
   infoRow: { borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 9, marginBottom: 9 },
   infoLabel: { color: colors.muted, fontSize: 11 },
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
   mapWrap: { borderRadius: 14, height: 250, marginTop: 14, overflow: 'hidden' },
   mapEmpty: { alignItems: 'center', backgroundColor: colors.map, flex: 1, justifyContent: 'center', padding: 20 },
   error: { color: colors.tealDark, fontSize: 11, marginHorizontal: 18, marginTop: 12, textAlign: 'center' },
-  footer: { backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 11 },
+  footer: { backgroundColor: colors.surface, borderTopColor: colors.line, borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 11 },
   chatButton: { backgroundColor: colors.teal, borderRadius: 22, paddingVertical: 13 },
   chatButtonText: { color: colors.white, fontSize: 12, fontWeight: '800', textAlign: 'center' },
-});
+}));

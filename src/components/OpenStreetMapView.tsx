@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, View , StyleSheet} from 'react-native';
 import WebView from 'react-native-webview';
 import { createLeafletMapHtml, parseMapMarkerMessage } from '../utils/leafletMapHtml';
-import { colors } from '../theme';
+import { colors , createThemedStyles} from '../theme';
 import type { Coordinates, MapMarker } from '../types';
 
 type Props = {
@@ -31,7 +31,7 @@ export function OpenStreetMapView({ center, markers, showCurrentLocation, select
       originWhitelist={['*']}
       renderLoading={() => (
         <View style={styles.loading}>
-          <ActivityIndicator color="#304A6E" />
+          <ActivityIndicator color={colors.teal} />
         </View>
       )}
       scrollEnabled={false}
@@ -42,7 +42,7 @@ export function OpenStreetMapView({ center, markers, showCurrentLocation, select
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   webView: { backgroundColor: colors.map, flex: 1 },
   loading: { alignItems: 'center', backgroundColor: colors.map, flex: 1, justifyContent: 'center' },
-});
+}));

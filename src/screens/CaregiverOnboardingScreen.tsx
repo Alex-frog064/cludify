@@ -1,21 +1,12 @@
 import { useState } from 'react';
-import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  KeyboardTypeOptions,
-  Pressable,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Image, KeyboardAvoidingView, KeyboardTypeOptions, Pressable, Platform, ScrollView, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text, LocalizedTextInput as TextInput } from '../components/LocalizedText';
 import * as ImagePicker from 'expo-image-picker';
-import { colors } from '../theme';
+import { colors , createThemedStyles} from '../theme';
 import { getCurrentServiceLocation } from '../utils/currentServiceLocation';
 import { CaregiverAvailability, Coordinates, UserAccount } from '../types';
+import { useAppSettings } from '../context/AppSettingsContext';
+import { showLocalizedAlert } from '../utils/localizedAlert';
 
 type Props = {
   account: UserAccount;
@@ -47,6 +38,7 @@ const specialtyOptions = [
 ];
 
 export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Props) {
+  const { language } = useAppSettings();
   const [step, setStep] = useState(account.caregiverSetupDraft ? 1 : 0);
   const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [error, setError] = useState('');
@@ -79,7 +71,8 @@ export function CaregiverOnboardingScreen({ account, onCancel, onComplete }: Pro
         setPhotoUri(result.assets[0].uri);
       }
     } catch (pickerError) {
-      Alert.alert(
+      showLocalizedAlert(
+        language,
         'No se pudo abrir la galería',
         pickerError instanceof Error ? pickerError.message : 'Intenta seleccionar tu foto otra vez.',
       );
@@ -435,21 +428,21 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   scrollView: { flex: 1 },
-  header: { alignItems: 'center', backgroundColor: colors.white, flexDirection: 'row', height: 54, justifyContent: 'center' },
+  header: { alignItems: 'center', backgroundColor: colors.surface, flexDirection: 'row', height: 54, justifyContent: 'center' },
   backButton: { alignItems: 'center', height: 44, justifyContent: 'center', left: 13, position: 'absolute', width: 44 },
   backText: { color: colors.ink, fontSize: 31, lineHeight: 34, marginTop: -4 },
   headerTitle: { color: colors.tealDark, fontSize: 14, fontWeight: '800' },
   stepCount: { color: colors.muted, fontSize: 10, position: 'absolute', right: 18 },
   progressTrack: { backgroundColor: colors.line, height: 3 },
-  progressFill: { backgroundColor: colors.tealDark, height: 3 },
+  progressFill: { backgroundColor: colors.teal, height: 3 },
   content: { paddingHorizontal: 22, paddingTop: 25, paddingBottom: 22 },
   eyebrow: { color: colors.tealDark, fontSize: 10, fontWeight: '800', letterSpacing: 1.1 },
   title: { color: colors.tealDark, fontSize: 23, fontWeight: '800', marginTop: 8 },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 21, marginTop: 6 },
-  photoPicker: { alignItems: 'center', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 15, borderWidth: 1, flexDirection: 'row', marginBottom: 19, padding: 12 },
+  photoPicker: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 15, borderWidth: 1, flexDirection: 'row', marginBottom: 19, padding: 12 },
   photoPlaceholder: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 29, height: 58, justifyContent: 'center', width: 58 },
   photo: { backgroundColor: colors.tealPale, borderRadius: 29, height: 58, width: 58 },
   photoIcon: { color: colors.tealDark, fontSize: 25, fontWeight: '400' },
@@ -461,7 +454,7 @@ const styles = StyleSheet.create({
   field: { marginBottom: 15 },
   label: { color: colors.ink, fontSize: 11, fontWeight: '700', marginBottom: 7 },
   fieldHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginBottom: 8 },
-  input: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 11, borderWidth: 1, color: colors.ink, fontSize: 12, height: 47, paddingHorizontal: 13 },
+  input: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 11, borderWidth: 1, color: colors.ink, fontSize: 12, height: 47, paddingHorizontal: 13 },
   multilineInput: { height: 102, paddingTop: 12, textAlignVertical: 'top' },
   notice: { alignItems: 'flex-start', backgroundColor: colors.tealPale, borderRadius: 11, flexDirection: 'row', marginTop: 2, padding: 11 },
   noticeIcon: { color: colors.tealDark, fontSize: 14, marginRight: 7 },
@@ -470,19 +463,19 @@ const styles = StyleSheet.create({
   halfField: { flex: 1, marginRight: 8 },
   descriptionField: { marginTop: 1 },
   chipList: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 3 },
-  chip: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 18, borderWidth: 1, marginBottom: 8, marginRight: 7, paddingHorizontal: 11, paddingVertical: 9 },
+  chip: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 18, borderWidth: 1, marginBottom: 8, marginRight: 7, paddingHorizontal: 11, paddingVertical: 9 },
   selectedChip: { backgroundColor: colors.tealPale, borderColor: colors.tealDark },
   chipText: { color: colors.muted, fontSize: 10, fontWeight: '600' },
   selectedChipText: { color: colors.tealDark },
   dayList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
-  dayChip: { alignItems: 'center', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 13, borderWidth: 1, height: 42, justifyContent: 'center', width: 42 },
-  selectedDayChip: { backgroundColor: colors.tealDark, borderColor: colors.tealDark },
+  dayChip: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 13, borderWidth: 1, height: 42, justifyContent: 'center', width: 42 },
+  selectedDayChip: { backgroundColor: colors.teal, borderColor: colors.tealDark },
   dayText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
   selectedDayText: { color: colors.white },
   scheduleLabel: { marginTop: 23 },
   error: { color: colors.tealDark, fontSize: 11, lineHeight: 16, marginTop: 6 },
-  footer: { backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12 },
+  footer: { backgroundColor: colors.surface, borderTopColor: colors.line, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12 },
   footerNote: { color: colors.muted, fontSize: 9, marginBottom: 9, textAlign: 'center' },
   continueButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 15, paddingVertical: 14 },
   continueText: { color: colors.white, fontSize: 13, fontWeight: '800' },
-});
+}));

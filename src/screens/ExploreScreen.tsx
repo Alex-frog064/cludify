@@ -1,17 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { colors, createThemedStyles } from '../theme';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  FlatList,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { LocalizedText as Text } from '../components/LocalizedText';
 import * as Location from 'expo-location';
 import { ChevronRight, Star } from 'lucide-react-native';
 import { OpenStreetMapView } from '../components/OpenStreetMapView';
@@ -35,21 +26,8 @@ const categories: { label: Category; icon: IconName }[] = [
   { label: 'Enfermería', icon: 'medkit-outline' },
   { label: 'Urgente', icon: 'alert-circle-outline' },
 ];
-const colors = {
-  ink: '#0F1C30',
-  muted: '#668DC0',
-  tealDark: '#304A6E',
-  tealPale: '#C0D0EF',
-  secondary: '#668DC0',
-  canvas: '#F7F9FC',
-  white: '#FFFFFF',
-  line: '#C2C6CE',
-  map: '#F7F9FC',
-  highlightSoft: '#C0D0EF',
-};
 const radiusOptions = [5, 10, 20];
 const defaultLocation: Coordinates = { latitude: 19.3869, longitude: -99.1627 };
-const teal = colors.tealDark;
 
 export function ExploreScreen({ onSelectCaregiver, token }: Props) {
   const [activeCategory, setActiveCategory] = useState<Category>('Todos');
@@ -306,7 +284,7 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
 
       {!mapMarkers.length && (
         <View pointerEvents="none" style={styles.emptyMapMessage}>
-          {token && caregiversLoading ? <ActivityIndicator color={teal} size="small" /> : null}
+          {token && caregiversLoading ? <ActivityIndicator color={colors.teal} size="small" /> : null}
           <Text style={styles.emptyMapText}>
             {!token
               ? 'Inicia sesión para ver cuidadores disponibles.'
@@ -373,7 +351,7 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
                   return (
                     <View style={styles.featuredEmpty}>
                       {token && caregiversLoading ? (
-                        <ActivityIndicator color={teal} size="small" />
+                        <ActivityIndicator color={colors.teal} size="small" />
                       ) : (
                         <Text style={styles.emptyListText}>
                           {token ? mapError || 'No hay perfiles destacados en esta categoría.' : 'Inicia sesión para descubrir cuidadores.'}
@@ -384,7 +362,7 @@ export function ExploreScreen({ onSelectCaregiver, token }: Props) {
                 }
                 return (
                   <View style={styles.emptyList}>
-                    {token && caregiversLoading ? <ActivityIndicator color={teal} size="small" /> : (
+                    {token && caregiversLoading ? <ActivityIndicator color={colors.teal} size="small" /> : (
                       <>
                         <Ionicons color={colors.muted} name="location-outline" size={21} />
                         <Text style={styles.emptyListText}>
@@ -465,7 +443,7 @@ function FeaturedCaregiverCard({
       <View style={styles.featuredInfo}>
         <View style={styles.featuredNameLine}>
           <Text numberOfLines={1} style={styles.featuredName}>{caregiver.name}</Text>
-          {caregiver.verified && <Ionicons color={teal} name="checkmark-circle" size={14} />}
+          {caregiver.verified && <Ionicons color={colors.teal} name="checkmark-circle" size={14} />}
         </View>
         <Text numberOfLines={1} style={styles.featuredRole}>
           {caregiver.specialties[0] || caregiver.title}
@@ -498,7 +476,7 @@ function CaregiverListItem({ caregiver, onPress }: { caregiver: NearbyCaregiver;
       <View style={styles.caregiverInfo}>
         <View style={styles.caregiverNameLine}>
           <Text numberOfLines={1} style={styles.caregiverName}>{caregiver.name}</Text>
-          {caregiver.verified && <Ionicons color={teal} name="checkmark-circle" size={14} />}
+          {caregiver.verified && <Ionicons color={colors.teal} name="checkmark-circle" size={14} />}
           <View style={styles.rating}>
             <Star color={colors.secondary} fill={colors.secondary} size={12} strokeWidth={1.8} />
             <Text style={styles.ratingText}>{caregiver.rating}</Text>
@@ -561,7 +539,7 @@ function CaregiverDetail({
       </View>
 
       <View style={styles.detailLocation}>
-        <Ionicons color={teal} name="location-outline" size={17} />
+        <Ionicons color={colors.teal} name="location-outline" size={17} />
         <Text numberOfLines={1} style={styles.detailLocationText}>
           {caregiver.location} · {caregiver.distance}
         </Text>
@@ -576,13 +554,13 @@ function CaregiverDetail({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   screen: { backgroundColor: colors.map, flex: 1, overflow: 'hidden' },
   mapBackground: StyleSheet.absoluteFill,
   statusPill: {
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderColor: colors.line,
     borderRadius: 22,
     borderWidth: 1,
@@ -597,15 +575,15 @@ const styles = StyleSheet.create({
     top: 10,
   },
   statusDot: { backgroundColor: colors.secondary, borderRadius: 4, height: 8, marginRight: 8, width: 8 },
-  statusDotReady: { backgroundColor: teal },
+  statusDotReady: { backgroundColor: colors.teal },
   statusText: { color: colors.ink, flexShrink: 1, fontSize: 11, fontWeight: '700' },
   statusCount: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 10, height: 21, justifyContent: 'center', marginLeft: 8, minWidth: 24, paddingHorizontal: 6 },
-  statusCountText: { color: teal, fontSize: 10, fontWeight: '800' },
+  statusCountText: { color: colors.teal, fontSize: 10, fontWeight: '800' },
   mapFilters: { left: 12, position: 'absolute', right: 66, top: 56 },
   mapFilterContent: { alignItems: 'center', paddingRight: 5 },
   mapFilter: {
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderColor: colors.line,
     borderRadius: 18,
     borderWidth: 1,
@@ -614,13 +592,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 9,
   },
-  mapFilterActive: { backgroundColor: teal, borderColor: teal },
+  mapFilterActive: { backgroundColor: colors.teal, borderColor: colors.teal },
   mapFilterText: { color: colors.ink, fontSize: 10, fontWeight: '700', marginLeft: 5 },
   mapFilterTextActive: { color: colors.white },
   mapControls: { alignItems: 'center', position: 'absolute', right: 12, top: 109 },
   mapAction: {
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderColor: colors.line,
     borderRadius: 14,
     borderWidth: 1,
@@ -631,7 +609,7 @@ const styles = StyleSheet.create({
   },
   radiusButton: {
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderColor: colors.line,
     borderRadius: 14,
     borderWidth: 1,
@@ -644,7 +622,7 @@ const styles = StyleSheet.create({
   emptyMapMessage: {
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderColor: colors.line,
     borderWidth: 1,
     borderRadius: 13,
@@ -658,7 +636,7 @@ const styles = StyleSheet.create({
   },
   emptyMapText: { color: colors.muted, flexShrink: 1, fontSize: 10, lineHeight: 15, marginLeft: 7, textAlign: 'center' },
   sheet: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     bottom: 0,
@@ -676,7 +654,7 @@ const styles = StyleSheet.create({
   featuredSubtitle: { color: colors.muted, fontSize: 9, marginTop: 2 },
   featuredCard: {
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderColor: colors.line,
     borderRadius: 16,
     borderWidth: 1,
@@ -744,14 +722,14 @@ const styles = StyleSheet.create({
   detailAvailability: { marginBottom: 12 },
   detailAvailabilityLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   detailSectionLabel: { color: colors.muted, fontSize: 10, fontWeight: '700' },
-  detailAvailabilityText: { color: teal, fontSize: 10, fontWeight: '800' },
+  detailAvailabilityText: { color: colors.teal, fontSize: 10, fontWeight: '800' },
   detailAvailabilityTrack: { backgroundColor: colors.line, borderRadius: 4, height: 7, overflow: 'hidden' },
-  detailAvailabilityFill: { backgroundColor: teal, borderRadius: 4, height: '100%', width: '86%' },
+  detailAvailabilityFill: { backgroundColor: colors.teal, borderRadius: 4, height: '100%', width: '86%' },
   detailAvailabilityFillBusy: { backgroundColor: colors.line, width: '48%' },
   detailLocation: { alignItems: 'center', flexDirection: 'row', marginBottom: 13 },
   detailLocationText: { color: colors.muted, flex: 1, fontSize: 10, marginLeft: 6 },
   detailPrice: { color: colors.ink, fontSize: 15, fontWeight: '800', marginLeft: 8 },
   detailPriceUnit: { color: colors.muted, fontSize: 9, fontWeight: '500' },
-  profileButton: { alignItems: 'center', backgroundColor: teal, borderRadius: 15, flexDirection: 'row', justifyContent: 'center', minHeight: 46 },
+  profileButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 15, flexDirection: 'row', justifyContent: 'center', minHeight: 46 },
   profileButtonText: { color: colors.white, fontSize: 12, fontWeight: '800', marginRight: 8 },
-});
+}));

@@ -1,6 +1,7 @@
 import { createElement, useEffect, useMemo, useRef } from 'react';
+import { createThemedStyles } from '../theme';
 import type { CSSProperties } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View , StyleSheet} from 'react-native';
 import { createLeafletMapHtml, parseMapMarkerMessage } from '../utils/leafletMapHtml';
 import type { Coordinates, MapMarker } from '../types';
 
@@ -43,6 +44,6 @@ export function OpenStreetMapView({ center, markers, showCurrentLocation, onMark
 
 const iframeStyle: CSSProperties = { border: 'none', height: '100%', width: '100%' };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   frame: { flex: 1, overflow: 'hidden' },
-});
+}));

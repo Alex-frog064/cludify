@@ -1,16 +1,7 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { colors as themeColors, createThemedStyles } from '../theme';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text, LocalizedTextInput as TextInput } from '../components/LocalizedText';
 import { ScreenTransition } from '../components/ScreenTransition';
 import { getCuidadores, loginUser, registerUser } from '../api/auth';
 import { getCurrentServiceLocation } from '../utils/currentServiceLocation';
@@ -23,14 +14,15 @@ const PHONE_MAX_LENGTH = 10;
 const LICENSE_MAX_LENGTH = 8;
 const RFC_MAX_LENGTH = 13;
 const authColors = {
-  primary: '#304A6E',
-  secondary: '#668DC0',
-  ink: '#0F1C30',
-  light: '#C0D0EF',
-  neutral: '#C2C6CE',
-  white: '#FFFFFF',
-  canvas: '#F7F9FC',
-} as const;
+  get primary() { return themeColors.teal; },
+  get secondary() { return themeColors.secondary; },
+  get ink() { return themeColors.ink; },
+  get light() { return themeColors.tealPale; },
+  get neutral() { return themeColors.line; },
+  get surface() { return themeColors.surface; },
+  get white() { return themeColors.white; },
+  get canvas() { return themeColors.canvas; },
+};
 
 type Props = {
   mode: AuthMode;
@@ -596,12 +588,12 @@ function RoleOption({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   screen: { backgroundColor: authColors.canvas, flex: 1 },
   backgroundImage: { bottom: 0, height: '100%', left: 0, position: 'absolute', right: 0, top: 0, width: '100%' },
   back: {
     alignItems: 'center',
-    backgroundColor: authColors.white,
+    backgroundColor: authColors.surface,
     borderColor: authColors.neutral,
     borderRadius: 21,
     borderWidth: 1,
@@ -620,7 +612,7 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
   formPanel: {
     alignSelf: 'center',
-    backgroundColor: authColors.white,
+    backgroundColor: authColors.surface,
     borderRadius: 26,
     marginBottom: 12,
     maxWidth: 480,
@@ -640,7 +632,7 @@ const styles = StyleSheet.create({
   title: { color: authColors.ink, fontSize: 28, fontWeight: '800', marginTop: 8, textAlign: 'center' },
   subtitle: { color: authColors.secondary, fontSize: 13, lineHeight: 20, marginBottom: 20, marginTop: 8, textAlign: 'center' },
   roleRow: { flexDirection: 'row', marginBottom: 18 },
-  roleOption: { alignItems: 'center', backgroundColor: authColors.white, borderColor: authColors.neutral, borderRadius: 13, borderWidth: 1, flex: 1, marginRight: 8, minHeight: 105, paddingHorizontal: 8, paddingVertical: 11 },
+  roleOption: { alignItems: 'center', backgroundColor: authColors.surface, borderColor: authColors.neutral, borderRadius: 13, borderWidth: 1, flex: 1, marginRight: 8, minHeight: 105, paddingHorizontal: 8, paddingVertical: 11 },
   activeRoleOption: { backgroundColor: authColors.light, borderColor: authColors.primary },
   roleIcon: { color: authColors.secondary, fontSize: 20 },
   activeRoleIcon: { color: authColors.primary },
@@ -649,7 +641,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: authColors.primary, fontSize: 14, fontWeight: '800', marginBottom: 13, marginTop: 3 },
   inputGroup: { marginBottom: 14 },
   label: { color: authColors.ink, fontSize: 12, fontWeight: '700', marginBottom: 7 },
-  input: { backgroundColor: authColors.white, borderColor: authColors.neutral, borderRadius: 14, borderWidth: 1, color: authColors.ink, fontSize: 14, height: 52, paddingHorizontal: 15 },
+  input: { backgroundColor: authColors.surface, borderColor: authColors.neutral, borderRadius: 14, borderWidth: 1, color: authColors.ink, fontSize: 14, height: 52, paddingHorizontal: 15 },
   inputFocused: { borderColor: authColors.secondary },
   fieldError: { color: authColors.ink, fontSize: 11, lineHeight: 15, marginTop: 5 },
   recoveryLink: { alignSelf: 'flex-end', marginBottom: 14, marginTop: -5, paddingVertical: 3 },
@@ -663,4 +655,4 @@ const styles = StyleSheet.create({
   switchLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginTop: 23 },
   switchText: { color: authColors.secondary, fontSize: 12 },
   switchLink: { color: authColors.secondary, fontSize: 12, fontWeight: '800' },
-});
+}));

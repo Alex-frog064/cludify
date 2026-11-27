@@ -1,8 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, AppState } from 'react-native';
+import { ActivityIndicator, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { AppSettingsProvider, useAppSettings } from './src/context/AppSettingsContext';
+import { showLocalizedAlert } from './src/utils/localizedAlert';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { ClientProfileScreen } from './src/screens/ClientProfileScreen';
@@ -37,7 +39,8 @@ function getFamilyTab(tab: TabKey): FamilyTabKey {
   return tab === 'care' || tab === 'messages' || tab === 'account' ? tab : 'account';
 }
 
-export default function App() {
+function AppContent() {
+  const { ready, themeMode, language } = useAppSettings();
   const [activeTab, setActiveTab] = useState<TabKey>('explore');
   const [selectedCaregiver, setSelectedCaregiver] = useState<Caregiver | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<SelectedPatient | null>(null);
@@ -132,7 +135,7 @@ export default function App() {
         ? { ...current, caregiverProfile: { ...current.caregiverProfile, disponible: false } }
         : current);
       setAvailabilityActivatedAt(null);
-      Alert.alert('Disponibilidad finalizada', 'Pasaron 30 minutos y tu perfil se desactivó automáticamente.');
+      showLocalizedAlert(language, 'Disponibilidad finalizada', 'Pasaron 30 minutos y tu perfil se desactivó automáticamente.');
     };
     const remaining = ACTIVE_WINDOW_MS - (Date.now() - availabilityActivatedAt);
     if (remaining <= 0) {
@@ -141,7 +144,18 @@ export default function App() {
     }
     const timeout = setTimeout(() => { void deactivate(); }, remaining);
     return () => clearTimeout(timeout);
-  }, [reporterAvailable, availabilityActivatedAt, reporterApiId, reporterToken]);
+  }, [reporterAvailable, availabilityActivatedAt, reporterApiId, reporterToken, language]);
+
+  if (!ready) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView edges={['top', 'bottom']} style={{ alignItems: 'center', backgroundColor: colors.canvas, flex: 1, justifyContent: 'center' }}>
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
+          <ActivityIndicator color={colors.teal} />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
 
   const openAuth = (mode: AuthMode) => {
     setHasStarted(true);
@@ -187,7 +201,7 @@ export default function App() {
       return;
     }
     if (signedInUser.role !== 'family') {
-      Alert.alert('Solo familiares', 'Los cuidadores no pueden solicitar sus propios servicios.');
+      showLocalizedAlert(language, 'Solo familiares', 'Los cuidadores no pueden solicitar sus propios servicios.');
       return;
     }
     if (!selectedCaregiver) return;
@@ -201,13 +215,13 @@ export default function App() {
       return;
     }
     if (signedInUser.role !== 'family') {
-      Alert.alert('Solo familiares', 'Los cuidadores pueden ver el historial, pero no iniciar conversaciones.');
+      showLocalizedAlert(language, 'Solo familiares', 'Los cuidadores pueden ver el historial, pero no iniciar conversaciones.');
       return;
     }
 
     const cuidadorId = Number(selectedCaregiver.id);
     if (!Number.isFinite(cuidadorId)) {
-      Alert.alert('No se pudo iniciar el chat', 'Este cuidador no tiene un identificador válido.');
+      showLocalizedAlert(language, 'No se pudo iniciar el chat', 'Este cuidador no tiene un identificador válido.');
       return;
     }
 
@@ -218,7 +232,7 @@ export default function App() {
       setSelectedCaregiver(null);
       setActiveTab('messages');
     } catch (e) {
-      Alert.alert('No se pudo iniciar el chat', e instanceof Error ? e.message : 'Intenta de nuevo.');
+      showLocalizedAlert(language, 'No se pudo iniciar el chat', e instanceof Error ? e.message : 'Intenta de nuevo.');
     } finally {
       setChatLoading(false);
     }
@@ -234,12 +248,12 @@ export default function App() {
       const abuelos = await getAbuelos(signedInUser.token);
       const found = abuelos.find((item) => Number(item.familiar_id) === familiarId);
       if (!found || !found.id) {
-        Alert.alert('Sin paciente registrado', 'Esta familia todavía no tiene un paciente en su perfil.');
+        showLocalizedAlert(language, 'Sin paciente registrado', 'Esta familia todavía no tiene un paciente en su perfil.');
         return;
       }
       openPatientProfile(Number(found.id), familiarNombre, consultaId);
     } catch (e) {
-      Alert.alert('No se pudo abrir el perfil', e instanceof Error ? e.message : 'Intenta de nuevo.');
+      showLocalizedAlert(language, 'No se pudo abrir el perfil', e instanceof Error ? e.message : 'Intenta de nuevo.');
     }
   };
 
@@ -318,7 +332,7 @@ export default function App() {
       setCaregiverSetup(null);
       setActiveTab('notifications');
     } catch (e) {
-      Alert.alert('No se pudo crear el perfil de cuidador', e instanceof Error ? e.message : 'Intenta de nuevo.');
+      showLocalizedAlert(language, 'No se pudo crear el perfil de cuidador', e instanceof Error ? e.message : 'Intenta de nuevo.');
       throw e;
     }
   };
@@ -327,7 +341,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
-          <StatusBar style="dark" />
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
           <CaregiverOnboardingScreen
             account={caregiverSetup}
             onCancel={() => {
@@ -345,7 +359,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
-          <StatusBar style="dark" />
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
           <AuthScreen
             mode={authMode}
             onBack={() => setAuthMode(null)}
@@ -361,7 +375,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
-          <StatusBar style="dark" />
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
           <WelcomeScreen onBegin={() => setAuthMode('login')} />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -372,7 +386,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
-          <StatusBar style="dark" />
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
           <ClientProfileScreen
             abueloId={selectedPatient.abueloId}
             familiarNombre={selectedPatient.familiarNombre}
@@ -393,7 +407,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
-          <StatusBar style="dark" />
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
           <ServiceRequestScreen
             servicio={editingServicio}
             token={signedInUser?.token ?? ''}
@@ -402,7 +416,7 @@ export default function App() {
               setEditingServicio(null);
               setServicioRefreshKey((key) => key + 1);
               setActiveTab('care');
-              Alert.alert('Servicio actualizado', 'Los cambios ya están disponibles en Mis cuidados.');
+              showLocalizedAlert(language, 'Servicio actualizado', 'Los cambios ya están disponibles en Mis cuidados.');
             }}
           />
         </SafeAreaView>
@@ -414,7 +428,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
-          <StatusBar style="dark" />
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
           <ServiceRequestScreen
             caregiver={serviceRequestCaregiver}
             token={signedInUser?.token ?? ''}
@@ -424,7 +438,7 @@ export default function App() {
               setSelectedCaregiver(null);
               setServicioRefreshKey((key) => key + 1);
               setActiveTab('care');
-              Alert.alert('Solicitud enviada', 'El cuidador verá el servicio en su apartado de Servicios.');
+              showLocalizedAlert(language, 'Solicitud enviada', 'El cuidador verá el servicio en su apartado de Servicios.');
             }}
           />
         </SafeAreaView>
@@ -436,7 +450,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
-          <StatusBar style="dark" />
+          <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
           <CaregiverProfileScreen
             caregiver={selectedCaregiver}
             onBack={() => setSelectedCaregiver(null)}
@@ -452,7 +466,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView edges={['top', 'bottom']} style={{ backgroundColor: colors.canvas, flex: 1 }}>
-        <StatusBar style="dark" />
+        <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
         {signedInUser?.role === 'caregiver' ? (
           <CaregiverWorkspaceScreen
             tab={getCaregiverTab(activeTab)}
@@ -525,5 +539,13 @@ export default function App() {
         <BottomTabBar role={signedInUser?.role} activeTab={activeTab} onSelectTab={setActiveTab} />
       </SafeAreaView>
     </SafeAreaProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <AppSettingsProvider>
+      <AppContent />
+    </AppSettingsProvider>
   );
 }

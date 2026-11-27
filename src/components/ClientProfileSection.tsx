@@ -1,16 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text, LocalizedTextInput as TextInput } from './LocalizedText';
 import { Plus, UserRoundPlus } from 'lucide-react-native';
 import {
   createAbuelo,
@@ -29,7 +19,7 @@ import {
 import { ConfirmationModal } from './ConfirmationModal';
 import { OpenStreetMapView } from './OpenStreetMapView';
 import { getCurrentServiceLocation, searchAddressSuggestions, AddressSuggestion } from '../utils/currentServiceLocation';
-import { secondaryColors as colors } from '../theme';
+import { secondaryColors as colors , createThemedStyles} from '../theme';
 import { CareRecipient, Geofence, Medication } from '../types';
 
 type Props = {
@@ -412,7 +402,7 @@ export function ClientProfileSection({ profiles, familiarId, token, onSave, onDe
             style={styles.addButton}
           >
             <UserRoundPlus color={colors.white} size={20} strokeWidth={2} />
-            <Text style={styles.addButtonText}>Agregar</Text>
+            <Text style={styles.addButtonText}>Agregar persona</Text>
           </Pressable>
         )}
       </View>
@@ -751,20 +741,20 @@ function ProfileDetail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   section: { alignSelf: 'stretch', marginTop: 24 },
   sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
   sectionHeading: { flex: 1, paddingRight: 8 },
   sectionTitle: { color: colors.tealDark, fontSize: 15, fontWeight: '800', textAlign: 'left' },
   sectionHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3, textAlign: 'left' },
-  addButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 12, flexDirection: 'row', gap: 5, paddingHorizontal: 13, paddingVertical: 10 },
+  addButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 12, flexDirection: 'row', gap: 5, paddingHorizontal: 13, paddingVertical: 10 },
   addButtonText: { color: colors.white, fontSize: 11, fontWeight: '800' },
   emptyCard: { alignItems: 'center', backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 16, borderWidth: 1, flexDirection: 'row', padding: 16 },
   emptyIcon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
   emptyCopy: { flex: 1, marginLeft: 12 },
   emptyTitle: { color: colors.tealDark, fontSize: 11, fontWeight: '800' },
   emptyText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 4, textAlign: 'left' },
-  profileCard: { alignItems: 'stretch', alignSelf: 'stretch', backgroundColor: colors.white, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: 10, padding: 15, shadowColor: colors.ink, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8 },
+  profileCard: { alignItems: 'stretch', alignSelf: 'stretch', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: 10, padding: 15, shadowColor: colors.ink, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8 },
   profileHeader: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   profileIdentity: { flex: 1, paddingRight: 8 },
   profileName: { color: colors.ink, fontSize: 13, fontWeight: '800', textAlign: 'left' },
@@ -789,18 +779,18 @@ const styles = StyleSheet.create({
   formTitle: { color: colors.tealDark, fontSize: 13, fontWeight: '800', marginBottom: 13, textAlign: 'left' },
   inputGroup: { marginBottom: 11 },
   formLabel: { color: colors.ink, fontSize: 10, fontWeight: '700', marginBottom: 5, textAlign: 'left' },
-  input: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 11, minHeight: 40, paddingHorizontal: 10, paddingVertical: 9, textAlign: 'left' },
+  input: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 11, minHeight: 40, paddingHorizontal: 10, paddingVertical: 9, textAlign: 'left' },
   multilineInput: { minHeight: 58, textAlignVertical: 'top' },
   medicationFormHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 9, marginTop: 2 },
   addMedicationButton: { alignItems: 'center', borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: 'row', gap: 4, paddingHorizontal: 9, paddingVertical: 6 },
   addMedicationText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
-  medicationForm: { backgroundColor: colors.white, borderRadius: 10, marginBottom: 9, padding: 10 },
-  medicationSummaryRow: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 10, flexDirection: 'row', gap: 8, marginBottom: 8, padding: 10 },
+  medicationForm: { backgroundColor: colors.surface, borderRadius: 10, marginBottom: 9, padding: 10 },
+  medicationSummaryRow: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 10, flexDirection: 'row', gap: 8, marginBottom: 8, padding: 10 },
   medicationFormTitle: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 9 },
   medicationIndex: { color: colors.ink, fontSize: 10, fontWeight: '800' },
   geoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   geoActions: { flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
-  suggestionBox: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, marginBottom: 10, marginTop: 8 },
+  suggestionBox: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 10, borderWidth: 1, marginBottom: 10, marginTop: 8 },
   suggestionItem: { borderBottomColor: colors.line, borderBottomWidth: 1, padding: 10 },
   suggestionText: { color: colors.ink, fontSize: 10, lineHeight: 14 },
   mapPreview: { borderRadius: 12, height: 180, marginBottom: 10, overflow: 'hidden' },
@@ -811,4 +801,4 @@ const styles = StyleSheet.create({
   cancelButton: { alignItems: 'center', paddingVertical: 10 },
   cancelButtonText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
   disclaimer: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 12, textAlign: 'center' },
-});
+}));

@@ -1,5 +1,6 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme';
+import { Modal, Pressable, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text } from './LocalizedText';
+import { colors , createThemedStyles} from '../theme';
 
 type Props = {
   visible: boolean;
@@ -62,9 +63,9 @@ export function ConfirmationModal({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   backdrop: { alignItems: 'center', backgroundColor: colors.ink, flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  card: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 24, maxWidth: 420, padding: 26, width: '100%' },
+  card: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, maxWidth: 420, padding: 26, width: '100%' },
   icon: { alignItems: 'center', backgroundColor: colors.tealPale, borderRadius: 30, height: 60, justifyContent: 'center', width: 60 },
   iconText: { color: colors.tealDark, fontSize: 26, fontWeight: '800' },
   destructiveIcon: { backgroundColor: colors.tealPale },
@@ -74,8 +75,8 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 10, marginTop: 24, width: '100%' },
   cancelButton: { alignItems: 'center', backgroundColor: colors.canvas, borderRadius: 13, flex: 1, justifyContent: 'center', minHeight: 48, paddingHorizontal: 10 },
   cancelText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
-  confirmButton: { alignItems: 'center', backgroundColor: colors.tealDark, borderRadius: 13, flex: 1, justifyContent: 'center', minHeight: 48, paddingHorizontal: 10 },
-  destructiveButton: { backgroundColor: colors.tealDark },
+  confirmButton: { alignItems: 'center', backgroundColor: colors.teal, borderRadius: 13, flex: 1, justifyContent: 'center', minHeight: 48, paddingHorizontal: 10 },
+  destructiveButton: { backgroundColor: colors.teal },
   disabledButton: { opacity: 0.65 },
   confirmText: { color: colors.white, fontSize: 12, fontWeight: '800' },
-});
+}));

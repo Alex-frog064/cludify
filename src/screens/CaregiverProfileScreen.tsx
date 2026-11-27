@@ -1,6 +1,7 @@
-import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, ScrollView, useWindowDimensions, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text } from '../components/LocalizedText';
 import { Caregiver } from '../types';
-import { colors } from '../theme';
+import { colors , createThemedStyles} from '../theme';
 
 type Props = {
   caregiver: Caregiver;
@@ -109,20 +110,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   screen: { backgroundColor: colors.canvas, flex: 1 },
   contentScroll: { flex: 1 },
   content: { paddingBottom: 18 },
   hero: { alignItems: 'center', backgroundColor: colors.tealPale, paddingBottom: 23, paddingTop: 52 },
-  backButton: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 20, height: 38, justifyContent: 'center', left: 18, position: 'absolute', top: 12, width: 38 },
+  backButton: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 20, height: 38, justifyContent: 'center', left: 18, position: 'absolute', top: 12, width: 38 },
   backText: { color: colors.ink, fontSize: 31, lineHeight: 34, marginTop: -4 },
-  favorite: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 20, height: 38, justifyContent: 'center', position: 'absolute', right: 18, top: 12, width: 38 },
+  favorite: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 20, height: 38, justifyContent: 'center', position: 'absolute', right: 18, top: 12, width: 38 },
   favoriteText: { color: colors.tealDark, fontSize: 21 },
-  photo: { backgroundColor: colors.white, borderColor: colors.white, borderRadius: 48, borderWidth: 4, height: 96, width: 96 },
+  photo: { backgroundColor: colors.surface, borderColor: colors.white, borderRadius: 48, borderWidth: 4, height: 96, width: 96 },
   name: { color: colors.ink, fontSize: 20, fontWeight: '800', marginTop: 11 },
   title: { color: colors.muted, fontSize: 12, marginTop: 3 },
   location: { color: colors.muted, fontSize: 11, marginTop: 8 },
-  stats: { alignItems: 'center', backgroundColor: colors.white, borderRadius: 15, flexDirection: 'row', justifyContent: 'space-around', marginHorizontal: 16, marginTop: -1, paddingVertical: 15 },
+  stats: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 15, flexDirection: 'row', justifyContent: 'space-around', marginHorizontal: 16, marginTop: -1, paddingVertical: 15 },
   stat: { alignItems: 'center', flex: 1 },
   statValue: { color: colors.ink, fontSize: 13, fontWeight: '800' },
   statLabel: { color: colors.muted, fontSize: 9, marginTop: 4 },
@@ -140,11 +141,11 @@ const styles = StyleSheet.create({
   availabilityTitle: { color: colors.tealDark, fontSize: 11, fontWeight: '700' },
   bodySmall: { color: colors.muted, fontSize: 9, marginTop: 4 },
   seeAgenda: { color: colors.muted, fontSize: 9, marginLeft: 'auto' },
-  reviewCard: { backgroundColor: colors.white, borderRadius: 13, padding: 13 },
+  reviewCard: { backgroundColor: colors.surface, borderRadius: 13, padding: 13 },
   reviewText: { color: colors.ink, fontSize: 11, fontStyle: 'italic', lineHeight: 17 },
   reviewBy: { color: colors.muted, fontSize: 9, marginTop: 8 },
   stars: { color: colors.gold, fontSize: 12, letterSpacing: 1, marginTop: 5 },
-  bottom: { alignItems: 'center', backgroundColor: colors.white, borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 12 },
+  bottom: { alignItems: 'center', backgroundColor: colors.surface, borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 12 },
   bottomCompact: { flexWrap: 'wrap', rowGap: 8 },
   priceBlock: { flexShrink: 1 },
   priceBlockCompact: { flexBasis: '100%' },
@@ -156,4 +157,4 @@ const styles = StyleSheet.create({
   requestButton: { backgroundColor: colors.teal, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 13 },
   compactRequestButton: { alignItems: 'center', flex: 1, minWidth: 0 },
   requestText: { color: colors.white, fontSize: 10, fontWeight: '800' },
-});
+}));

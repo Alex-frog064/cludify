@@ -1,8 +1,11 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Alert, Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, View, StyleSheet } from 'react-native';
+import { LocalizedText as Text } from './LocalizedText';
 import { Camera } from 'lucide-react-native';
-import { secondaryColors } from '../theme';
+import { secondaryColors , createThemedStyles} from '../theme';
+import { useAppSettings } from '../context/AppSettingsContext';
+import { showLocalizedAlert } from '../utils/localizedAlert';
 
 type Props = {
   uri?: string;
@@ -12,6 +15,7 @@ type Props = {
 };
 
 export function EditableProfileAvatar({ uri, name, size, onChange }: Props) {
+  const { language } = useAppSettings();
   const [scale] = useState(() => new Animated.Value(1));
   const [opacity] = useState(() => new Animated.Value(1));
 
@@ -30,7 +34,8 @@ export function EditableProfileAvatar({ uri, name, size, onChange }: Props) {
       if (source === 'camera') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
-          Alert.alert(
+          showLocalizedAlert(
+            language,
             'Permiso de cámara',
             permission.canAskAgain
               ? 'Permite el acceso a la cámara para tomar tu foto de perfil.'
@@ -46,7 +51,8 @@ export function EditableProfileAvatar({ uri, name, size, onChange }: Props) {
 
       if (!result.canceled && result.assets[0]) onChange(result.assets[0].uri);
     } catch (error) {
-      Alert.alert(
+      showLocalizedAlert(
+        language,
         'No se pudo seleccionar la foto',
         error instanceof Error ? error.message : 'Intenta de nuevo.',
       );
@@ -54,7 +60,7 @@ export function EditableProfileAvatar({ uri, name, size, onChange }: Props) {
   };
 
   const askForPhoto = () => {
-    Alert.alert('Foto de perfil', 'Elige cómo quieres agregar tu foto.', [
+    showLocalizedAlert(language, 'Foto de perfil', 'Elige cómo quieres agregar tu foto.', [
       { text: 'Tomar foto', onPress: () => { void pickPhoto('camera'); } },
       { text: 'Elegir de galería', onPress: () => { void pickPhoto('library'); } },
       { text: 'Cancelar', style: 'cancel' },
@@ -95,7 +101,7 @@ export function EditableProfileAvatar({ uri, name, size, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => StyleSheet.create({
   frame: {
     alignItems: 'center',
     backgroundColor: secondaryColors.white,
@@ -123,4 +129,4 @@ const styles = StyleSheet.create({
     right: -1,
     width: 26,
   },
-});
+}));

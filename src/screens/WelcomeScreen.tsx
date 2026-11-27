@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Animated, Image, Platform, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Animated, Image, Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { LocalizedText as Text } from '../components/LocalizedText';
 import { ScreenTransition } from '../components/ScreenTransition';
-import { colors } from '../theme';
+import { colors , createThemedStyles} from '../theme';
 
 type Props = { onBegin: () => void };
 
@@ -71,8 +72,8 @@ export function WelcomeScreen({ onBegin }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { backgroundColor: colors.white, flex: 1 },
+const styles = createThemedStyles(() => StyleSheet.create({
+  screen: { backgroundColor: colors.surface, flex: 1 },
   backgroundImage: {
     bottom: 0,
     height: '100%',
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
   description: { color: colors.muted, fontSize: 14, lineHeight: 22, marginTop: 10, maxWidth: 340 },
   primaryButton: {
     alignItems: 'center',
-    backgroundColor: colors.tealDark,
+    backgroundColor: colors.teal,
     borderRadius: 15,
     flexDirection: 'row',
     justifyContent: 'center',
@@ -105,4 +106,4 @@ const styles = StyleSheet.create({
   },
   buttonPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
   primaryButtonText: { color: colors.white, fontSize: 15, fontWeight: '800', marginRight: 9 },
-});
+}));
